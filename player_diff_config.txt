@@ -1,0 +1,6 @@
+player player
+board_raise_rate 20
+cursor_starting_x 3
+cursor_starting_y 5
+initial_height_offset 4
+grace_period 16
