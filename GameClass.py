@@ -10,44 +10,49 @@ import VirtualGameClass
 
 import ComboClass
 
+difficultyparamlist = [
+    "player", #player name
+    "board_raise_rate", #default speed or screen rise
+    "cursor_starting_x", #default cursor x position
+    "cursor_starting_y", #default cursor y position
+    "initial_height_offset", #how many blocks from the top will not spawn?
+    "grace_period" #how long can the board be full before the game ends?
+    ]
+
 class Game:
     
-    def __init__(self, filename, pn, cd, cpr, cpc, cb, cft, cds, css):
-        
-        f = open(filename, "r")
+    def __init__(self, playerinfo, playernumber, display_info):
+    # Collect info about the difficulty, such as the raise at which the board raises   
+
+        f = open(playerinfo, "r")
+
+        self.difficulty_info = {}
         for x in f:
             splitline = x.split(" ")
-            if splitline[0] == "player": #player name
-                self.playertype = splitline[1].strip()
-            elif splitline[0] == "board_raise_rate": #default speed or screen rise
-                self.board_raise_rate = int(splitline[1])
-            elif splitline[0] == "cursor_starting_x": #default cursor x position
-                self.cursor_starting_x = int(splitline[1])
-            elif splitline[0] == "cursor_starting_y": #default cursor y position
-                self.cursor_starting_y = int(splitline[1])
-            elif splitline[0] == "initial_height_offset": #how many blocks from the top will not spawn?
-                self.initial_height_offset = int(splitline[1])
-            elif splitline[0] == "grace_period": #how long on a full screen before a game over happens?
-                self.gp = int(splitline[1])
-                     
+            self.difficulty_info[splitline[0]] = int(splitline[1])
+            #TO-DO: throw exception if not everything in difficultyparamlist is filled in properly         
         f.close()
 
-        self.playernumber = pn
+    # Store the info
+        self.player_number = playernumber #the number of the player, zero-indexed: Player 0, Player 1, Player 2, etc.
+        self.player_type = self.difficulty_info["player_type"] #0 is human, 1 is ai
 
-        self.setup = SetupClass.Setup(cd, cpr, cpc, cb, cds, css, cft, self.board_raise_rate, self.initial_height_offset, self.gp)
+    # Make some useful objects
+        self.setup = SetupClass.Setup(display_info, self.difficulty_info)
         self.grid = GridClass.Grid(self.setup)
         self.buffer = BufferClass.Buffer(self.setup)
-        self.cursor = CursorClass.Cursor(self.cursor_starting_x, self.cursor_starting_y)
+        self.cursor = CursorClass.Cursor(self.difficulty_info["cursor_starting_x"], self.difficulty_info["cursor_starting_y"])
         self.gcq = set()
         self.combodata = []
         self.activecombo = 1
         self.scoreboard = ScoreboardClass.Scoreboard()
-        self.graceperiod = self.gp
+        self.graceperiod = self.difficulty_info["grace_period"]
         
-        self.vgame = VirtualGameClass.VirtualGame(self.setup, self.cursor, self.playernumber)
-        if self.playertype == "ai":
+        """
+        self.vgame = VirtualGameClass.VirtualGame(self.setup, self.cursor, self.player_number) #used 
+        if self.playertype == 1:
             self.vgame.v_copy_grid(self.grid)
-            
+        """    
             
 
     def swap_blocks(self, b1, b2):        
@@ -93,9 +98,11 @@ class Game:
                 if fooflag:
                     self.graceperiod -= 1
                 
-                if self.playertype == "ai":
+                '''
+                if self.playertype == 1:
                     self.vgame.v_copy_grid(self.grid)
                     self.vgame.reset_goals()
+                '''
         else:
             for column in range(self.setup.cells_per_row):
                 if self.grid.get_color(column, 0) != 0:
@@ -291,9 +298,11 @@ class Game:
                 self.activecombo = 1
                 self.combodata = [newcombos]
 
-            if self.playertype == "ai":
+            '''
+            if self.player_type == 1:
                 self.vgame.v_copy_gcq(self.gcq)
-                
+            '''
+
         if not self.grid.has_falling_blocks(self.setup) and len(self.gcq) == 0:
             if self.activecombo > 1:
                 print("Combo Dropped due to inactivity")
@@ -315,8 +324,9 @@ class Game:
                     self.grid.set_curr_fade(cell[0], cell[1], 0)
                     self.grid.set_type(cell[0], cell[1], "empty")
                     self.grid.set_color(cell[0], cell[1], -1)
-                    if (cell[0], cell[1]) in self.vgame.goals:
-                        self.vgame.goals.remove((cell[0], cell[1]))
+                    if self.player_type == 1:
+                        if (cell[0], cell[1]) in self.vgame.goals:
+                            self.vgame.goals.remove((cell[0], cell[1]))
                 to_be_removed.add(combo)
         
         for tbr in to_be_removed:
@@ -367,9 +377,11 @@ class Game:
                                 initialoffset = self.setup.cell_swap_speed
                             self.grid.set_offset(self.cursor.x, self.cursor.y, initialoffset)
                             self.grid.set_offset(self.cursor.x+1, self.cursor.y, -1*initialoffset)
-                            if self.playertype == "ai":
+                            '''
+                            if self.player_type == 1:
                                 self.vgame.vgrid.set_offset(self.cursor.x, self.cursor.y, initialoffset)
-                                self.vgame.vgrid.set_offset(self.cursor.x+1, self.cursor.y, -1*initialoffset)  
+                                self.vgame.vgrid.set_offset(self.cursor.x+1, self.cursor.y, -1*initialoffset)
+                            '''
         return 0
     
     def ai_logic(self, eventqueue, timer):
@@ -428,9 +440,10 @@ class Game:
         self.drop_blocks()
         self.combo_blocks()
         
-        if self.playertype == "ai":
+        '''
+        if self.player_type == 1:
             self.vgame.v_gameloop()
-        
+        '''
         if len(self.gcq) == 0 and self.graceperiod != 0 and timer % self.setup.board_raise_rate == 0:
             self.raise_board()
             
@@ -440,7 +453,7 @@ class Game:
             return False
         
     def draw_cursor(self, screen):
-        hoff = self.setup.display_width*(1+2*self.playernumber)
+        hoff = self.setup.display_width*(1+2*self.player_number)
         
         pygame.draw.rect(screen,
             self.setup.WHITE,
@@ -459,7 +472,7 @@ class Game:
             self.setup.cell_between*5) 
         
     def draw_frame(self, screen):
-        hoff = self.setup.display_width*(1+2*self.playernumber)
+        hoff = self.setup.display_width*(1+2*self.player_number)
         
         pygame.draw.rect(screen,
                          self.setup.WHITE,
@@ -470,10 +483,12 @@ class Game:
                          self.setup.cell_between)
          
     def draw_board(self, screen, timer):
-        if self.playertype == "ai":
+        '''
+        if self.playertype == 1:
             self.vgame.v_draw_board(screen, timer)
-        
-        hoff = self.setup.display_width*(1+2*self.playernumber)
+        '''
+
+        hoff = self.setup.display_width*(1+2*self.player_number)
         
         for column in range(self.setup.cells_per_row):
             index = self.buffer.get_color(column)

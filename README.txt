@@ -1,7 +1,7 @@
 Hi! Use the arrow keys to move the cursor, and space bar to swap the blocks in the cursor. If the blocks reach the top of the screen, you lose.
 
 UPCOMING FEATURES:
-	Holding a button to increase the rise speed
+	Overhaul and add comments
 
 
 The naming convention is that "rates" are for things that need to happen once every few seconds; "speeds" are for things that need to happen several times per second

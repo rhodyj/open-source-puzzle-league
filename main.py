@@ -3,12 +3,11 @@ import random
 import GameScreenClass
 
 
-random.seed(1000)
+random.seed(1000) #the random seed is ONLY set for debugging to make things more predictable
 # Initialize pygame
 pygame.init()
 
 gamescreen = GameScreenClass.GameScreen(["config.txt", ["player_diff_config.txt"]])
-
 done = False
 
 # -------- Main Program Loop -----------

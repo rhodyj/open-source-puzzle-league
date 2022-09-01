@@ -1,5 +1,5 @@
-player_type 0
-board_raise_rate 20
+player ai
+board_raise_rate 10
 cursor_starting_x 3
 cursor_starting_y 5
 initial_height_offset 4
