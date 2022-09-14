@@ -321,15 +321,15 @@ class VirtualGame:
         for column in range(self.vsetup.cells_per_row):
             for row in range(self.vsetup.cells_per_column):
                 if self.vgrid.get_offset(column, row) > 0:
-                    self.vgrid.set_offset(column, row, self.vgrid.get_offset(column, row) + self.vsetup.cell_swap_speed)
+                    self.vgrid.set_swap_offset(column, row, self.vgrid.get_offset(column, row) + self.vsetup.cell_swap_speed)
                 elif self.vgrid.get_offset(column, row) < 0:
-                    self.vgrid.set_offset(column, row, self.vgrid.get_offset(column, row) - self.vsetup.cell_swap_speed)
+                    self.vgrid.set_swap_offset(column, row, self.vgrid.get_offset(column, row) - self.vsetup.cell_swap_speed)
                 if self.vgrid.get_offset(column, row) > self.vsetup.cell_dimension:
                     self.v_swap_blocks((column, row), (column+1, row))
-                    self.vgrid.set_offset(column, row, 0)
+                    self.vgrid.set_swap_offset(column, row, 0)
                     
                 elif self.vgrid.get_offset(column, row) < -1*self.vsetup.cell_dimension:
-                    self.vgrid.set_offset(column, row, 0)
+                    self.vgrid.set_swap_offset(column, row, 0)
                         
     def v_pop_combos(self, combo):
         for row in range(self.vsetup.cells_per_column-1, -1, -1):

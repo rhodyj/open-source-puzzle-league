@@ -38,7 +38,7 @@ class GameScreen:
             self.gameover.append(False) #the i-th player has not had a game over yet
             self.games.append(g) #add the newly made game to the list of active games
 
-    # Values from the dictionary that are seful to have immediately
+    # Values from the dictionary that are useful to have immediately
         self.cells_per_row = self.config_info["cells_per_row"]
         self.cells_per_column = self.config_info["cells_per_column"]
         self.cell_dimension = self.config_info["cell_dimension"]

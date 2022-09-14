@@ -58,14 +58,14 @@ def draw_board(setup, screen, grid, buffer, cursor, timer, scoreboard):
             if color != setup.BLACK:
                 pygame.draw.rect(screen,
                              color,
-                             [(setup.cell_between + setup.cell_dimension) * (column) + setup.cell_between + grid.get_offset(column, row) + setup.cell_dimension//2,
+                             [(setup.cell_between + setup.cell_dimension) * (column) + setup.cell_between + grid.get_swap_offset(column, row) + setup.cell_dimension//2,
                               (setup.cell_between + setup.cell_dimension) * (row) + setup.cell_between + grid.get_drop_offset(column, row) + setup.cell_dimension//2 - grid.get_board_offset(), #draw from bottom up
                               setup.cell_dimension,
                               setup.cell_dimension])
             #if grid.can_drop(column, row):
             #    pygame.draw.rect(screen,
             #                 setup.WHITE,
-            #                 [(setup.cell_between + setup.cell_dimension) * column + setup.cell_between + grid.get_offset(column, row),
+            #                 [(setup.cell_between + setup.cell_dimension) * column + setup.cell_between + grid.get_swap_offset(column, row),
             #                  (setup.cell_between + setup.cell_dimension) * row + setup.cell_between + grid.get_drop_offset(column, row), #draw from bottom up
             #                  setup.cell_dimension//2,
             #                 setup.cell_dimension//2])

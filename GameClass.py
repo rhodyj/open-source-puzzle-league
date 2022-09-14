@@ -77,13 +77,13 @@ class Game:
                     for row in range(self.setup.cells_per_column):
                         
                         self.grid.set_color(column, row, self.grid.get_color(column, row+1))
-                        self.grid.set_offset(column, row, self.grid.get_swap_offset(column, row+1))
+                        self.grid.set_swap_offset(column, row, self.grid.get_swap_offset(column, row+1))
                         self.grid.set_drop_offset(column, row, self.grid.get_drop_offset(column, row+1))
                         self.grid.set_curr_fade(column, row, self.grid.get_curr_fade(column, row+1))
                         self.grid.set_type(column, row, self.grid.get_type(column, row+1))
 
                     self.grid.set_color(column, self.setup.cells_per_column-1, self.buffer.get_color(column))
-                    self.grid.set_offset(column, self.setup.cells_per_column-1, 0)
+                    self.grid.set_swap_offset(column, self.setup.cells_per_column-1, 0)
                     self.grid.set_drop_offset(column, self.setup.cells_per_column-1, 0)
                     self.grid.set_curr_fade(column, self.setup.cells_per_column-1, 0)
                     self.grid.set_type(column, self.setup.cells_per_column-1, "block")
@@ -241,15 +241,15 @@ class Game:
         for column in range(self.setup.cells_per_row):
             for row in range(self.setup.cells_per_column):
                 if self.grid.get_swap_offset(column, row) > 0:
-                    self.grid.set_offset(column, row, self.grid.get_swap_offset(column, row) + self.setup.cell_swap_speed)
+                    self.grid.set_swap_offset(column, row, self.grid.get_swap_offset(column, row) + self.setup.cell_swap_speed)
                 elif self.grid.get_swap_offset(column, row) < 0:
-                    self.grid.set_offset(column, row, self.grid.get_swap_offset(column, row) - self.setup.cell_swap_speed)
+                    self.grid.set_swap_offset(column, row, self.grid.get_swap_offset(column, row) - self.setup.cell_swap_speed)
                 if self.grid.get_swap_offset(column, row) > self.setup.cell_dimension:
                     self.swap_blocks((column, row), (column+1, row))
-                    self.grid.set_offset(column, row, 0)
+                    self.grid.set_swap_offset(column, row, 0)
                     
                 elif self.grid.get_swap_offset(column, row) < -1*self.setup.cell_dimension:
-                    self.grid.set_offset(column, row, 0)
+                    self.grid.set_swap_offset(column, row, 0)
                         
 
                 
@@ -375,12 +375,12 @@ class Game:
                             initialoffset = self.setup.cell_dimension % self.setup.cell_swap_speed
                             if initialoffset == 0:
                                 initialoffset = self.setup.cell_swap_speed
-                            self.grid.set_offset(self.cursor.x, self.cursor.y, initialoffset)
-                            self.grid.set_offset(self.cursor.x+1, self.cursor.y, -1*initialoffset)
+                            self.grid.set_swap_offset(self.cursor.x, self.cursor.y, initialoffset)
+                            self.grid.set_swap_offset(self.cursor.x+1, self.cursor.y, -1*initialoffset)
                             '''
                             if self.player_type == 1:
-                                self.vgame.vgrid.set_offset(self.cursor.x, self.cursor.y, initialoffset)
-                                self.vgame.vgrid.set_offset(self.cursor.x+1, self.cursor.y, -1*initialoffset)
+                                self.vgame.vgrid.set_swap_offset(self.cursor.x, self.cursor.y, initialoffset)
+                                self.vgame.vgrid.set_swap_offset(self.cursor.x+1, self.cursor.y, -1*initialoffset)
                             '''
         return 0
     
@@ -404,11 +404,11 @@ class Game:
                     initialoffset = self.setup.cell_dimension % self.setup.cell_swap_speed
                     if initialoffset == 0:
                         initialoffset = self.setup.cell_swap_speed
-                    self.grid.set_offset(self.cursor.x, self.cursor.y, initialoffset)
-                    self.grid.set_offset(self.cursor.x+1, self.cursor.y, -1*initialoffset)
+                    self.grid.set_swap_offset(self.cursor.x, self.cursor.y, initialoffset)
+                    self.grid.set_swap_offset(self.cursor.x+1, self.cursor.y, -1*initialoffset)
     
-                    self.vgame.vgrid.set_offset(self.cursor.x, self.cursor.y, initialoffset)
-                    self.vgame.vgrid.set_offset(self.cursor.x+1, self.cursor.y, -1*initialoffset)  
+                    self.vgame.vgrid.set_swap_offset(self.cursor.x, self.cursor.y, initialoffset)
+                    self.vgame.vgrid.set_swap_offset(self.cursor.x+1, self.cursor.y, -1*initialoffset)  
             elif command == "WANDER":
                 if self.cursor.x == self.setup.cells_per_row - 2 and self.cursor.y <= self.setup.cells_per_column - 2:
                     self.cursor.y += 1
