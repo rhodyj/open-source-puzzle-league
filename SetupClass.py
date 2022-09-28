@@ -45,7 +45,7 @@ class Setup:
         self.cell_swap_speed = displayinfo["cell_swap_speed"]
         self.combo_fade_time = displayinfo["combo_fade_time"]
         
-        self.initial_height_offset = difficultyinfo["initial_height_offset"]
-        self.board_raise_rate = difficultyinfo["board_raise_rate"]
+        self.initial_height_offset = difficultyinfo["initial_height_offset"] #how many blocks does the 
+        self.board_raise_rate = difficultyinfo["board_raise_rate"] #how fast does the board raise?
 
-        self.grace_period_counter = difficultyinfo["grace_period"]
+        self.grace_period_full = difficultyinfo["grace_period"] #how long can the board stay "topped out" before the game results in game over? Think of a bar that lowers when any column is full

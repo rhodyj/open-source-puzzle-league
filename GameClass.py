@@ -11,7 +11,7 @@ import VirtualGameClass
 import ComboClass
 
 difficultyparamlist = [
-    "player", #player name
+    "player_type", #player name
     "board_raise_rate", #default speed or screen rise
     "cursor_starting_x", #default cursor x position
     "cursor_starting_y", #default cursor y position
@@ -29,9 +29,18 @@ class Game:
         self.difficulty_info = {}
         for x in f:
             splitline = x.split(" ")
-            self.difficulty_info[splitline[0]] = int(splitline[1])
-            #TO-DO: throw exception if not everything in difficultyparamlist is filled in properly         
+            self.difficulty_info[splitline[0]] = int(splitline[1])    
         f.close()
+
+        #make sure all the necessary parameters were loaded from the file
+        allkeys = self.difficulty_info.keys()
+        missingkeys = []
+        for key in difficultyparamlist:
+            if key not in allkeys:
+                missingkeys.append(key)
+
+        #if any parameter is missing, end the program and report the error
+        assert len(missingkeys) == 0, f"Missing difficult info: {missingkeys}"
 
     # Store the info
         self.player_number = playernumber #the number of the player, zero-indexed: Player 0, Player 1, Player 2, etc.
@@ -53,65 +62,95 @@ class Game:
         if self.playertype == 1:
             self.vgame.v_copy_grid(self.grid)
         """    
-            
 
-    def swap_blocks(self, b1, b2):        
-        foo = self.grid.get_color(b2[0], b2[1])
-        self.grid.set_color(b2[0], b2[1], self.grid.get_color(b1[0], b1[1]))
-        self.grid.set_color(b1[0], b1[1], foo)
+    #swap_debuf_check is CURRENTLY UNUSED but may find use later
+    def swap_debug_check(self, cellcoords): #debug statement to be called when trying to swap two cells. Gives descriptive error messages.
+        x = cellcoords[0]
+        y = cellcoords[1]
+        assert self.grid.get_curr_fade(x, y) == 0, f"Cell at {cellcoords} is trying to swap while fading/being deleted"
+        assert self.grid.get_drop_offset(x, y) == 0, f"Cell at {cellcoords} is trying to swap while falling"
+        assert self.grid.get_swap_offset(x, y) == 0, f"Cell at {cellcoords} is trying to swap while already swapping"
+        assert self.grid.get_type(x,y) == "block" or self.grid.get_type(x,y) == "empty", f"Cell at {cellcoords} is an invalid type: {self.grid.get_type(x,y)}"
+
+    #when two cells have finished moving past each other visually, swap their values
+    def swap_blocks(self, b1, b2): #input is two tuples representing the coordinates of the two cells to be swapped
+
+        #take the coordinates from the tuples; mainly for code readability
+        x1 = b1[0]
+        y1 = b1[1]
+
+        x2 = b2[0]
+        y2 = b2[1]
+
+        #swap the colors and the types of the cells
+        # Other parts of the program should ensure that, when this process is called, the cells have the same drop/swap offset and combo timer (which should all be 0)
+        foo1 = self.grid.get_color(x1, y1)
+        foo2 = self.grid.get_color(x2, y2)
+        self.grid.set_color(x1, y1, foo2) #make cell 1 the color of cell 2
+        self.grid.set_color(x2, y2, foo1) #make cell 2 the old color of cell 1
         
-        foo = self.grid.get_type(b2[0], b2[1])
-        self.grid.set_type(b2[0], b2[1], self.grid.get_type(b1[0], b1[1]))
-        self.grid.set_type(b1[0], b1[1], foo)
+        foo1 = self.grid.get_type(x1, y1)
+        foo2 = self.grid.get_type(x2, y2)
+        self.grid.set_type(x1, y1, foo2) #make cell 1 the type of cell 2
+        self.grid.set_type(x2, y2, foo1) #make cell 2 the old type of cell 1
         
     def raise_board(self):
-        fooflag = False
-        boff = self.grid.get_board_offset()
+        fooflag = False #is there a cell in the very top row? Should we start counting down until game over/board full/"top out"?
+        boff = self.grid.get_board_offset() #boff stands for "board offset"
         
-        if self.graceperiod == self.setup.grace_period_counter:
-            boff = (boff + 1) % self.setup.cell_dimension           
+        if self.graceperiod == self.setup.grace_period_full: #if the grace period "health bar" is "full" (see SetupClass.py), we can raise the board
+            
+            #move the board up one pixel
+            boff = (boff + 1) % self.setup.cell_dimension
             self.grid.set_board_offset(boff)
             
+            #if the board was raised enough to add a new row
             if boff == 0:
+
+                #Move every cell up one position
                 for column in range(self.setup.cells_per_row):
-                    for row in range(self.setup.cells_per_column):
-                        
+
+                    #for every row except the bottom row, copy the data from the cell below it
+                    for row in range(self.setup.cells_per_column-1):
                         self.grid.set_color(column, row, self.grid.get_color(column, row+1))
                         self.grid.set_swap_offset(column, row, self.grid.get_swap_offset(column, row+1))
                         self.grid.set_drop_offset(column, row, self.grid.get_drop_offset(column, row+1))
                         self.grid.set_curr_fade(column, row, self.grid.get_curr_fade(column, row+1))
                         self.grid.set_type(column, row, self.grid.get_type(column, row+1))
 
+                    #since the border is below the bottom row, we instead copy the buffer data to the bottom row
+                    #the buffer hasn't been touched before, so all offsets/timers are 0
                     self.grid.set_color(column, self.setup.cells_per_column-1, self.buffer.get_color(column))
-                    self.grid.set_swap_offset(column, self.setup.cells_per_column-1, 0)
+                    self.grid.set_swap_offset(column, self.setup.cells_per_column-1, 0) 
                     self.grid.set_drop_offset(column, self.setup.cells_per_column-1, 0)
                     self.grid.set_curr_fade(column, self.setup.cells_per_column-1, 0)
                     self.grid.set_type(column, self.setup.cells_per_column-1, "block")
-        
-                    if self.grid.get_type(column, 0) == "border":
-                        fooflag = True
                 
-                self.buffer.spawn_blocks(self.setup)
+                #move the cursor's position up one, so that it remains on the blocks it was on previously
                 if self.cursor.y > 1:
                     self.cursor.y -= 1
-    
-                if fooflag:
-                    self.graceperiod -= 1
+
+                #Once all blocks have been moved up, refill the buffer
+                self.buffer.spawn_blocks(self.setup)
                 
                 '''
                 if self.playertype == 1:
                     self.vgame.v_copy_grid(self.grid)
                     self.vgame.reset_goals()
                 '''
-        else:
-            for column in range(self.setup.cells_per_row):
-                if self.grid.get_color(column, 0) != 0:
-                    fooflag = True
-            if fooflag:
-                self.graceperiod -= 1
-            else:
-                self.graceperiod = self.setup.grace_period_counter
+        #check if any cell in the top row is not empty (i.e. if any column is touching the top of the board)
+        for column in range(self.setup.cells_per_row):
+            if self.grid.get_type(column, 0) != "empty":
+                fooflag = True
+
+        if fooflag: #if the board is too full
+            self.graceperiod -= 1 #start counting down until GAME OVER
+        else: #but if the top row is clear now
+            self.graceperiod = self.setup.grace_period_full #reset the GAME OVER countdown. This would "refill the health bar"
         
+
+    #TO-DO: Continue from here.
+
 
     def clean(self, combolist):
         

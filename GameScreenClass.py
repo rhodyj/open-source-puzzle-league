@@ -6,7 +6,7 @@ configparamlist = [
     "cell_dimension", #size of square cells (in pixels)
     "cells_per_row", #how many cells per row?
     "cells_per_column", #how many cells per column?
-    "cell_bewteen", #space between cells (in pixels)
+    "cell_between", #space between cells (in pixels)
     "border_dimension", #size of square border tiles (in pixels)
     "combo_fade_time", #how many ticks does it take for a combo'd cell to be erased
     "cell_drop_speed", #how fast to cell drop?
@@ -23,7 +23,17 @@ class GameScreen:
         for x in f:
             splitline = x.split(" ")
             self.config_info[splitline[0]] = int(splitline[1])
-            #TO-DO: Throw exception if not everything in configparamlist is filled in properly
+
+        #make sure all the necessary parameters were loaded from the file
+        allkeys = self.config_info.keys()
+        missingkeys = []
+        for key in configparamlist:
+            if key not in allkeys:
+                missingkeys.append(key)
+
+        #if any parameter is missing, end the program and report the error
+        assert len(missingkeys) == 0, f"Missing configuration info: {missingkeys}"
+
 
         f.close()
         

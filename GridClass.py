@@ -106,12 +106,15 @@ class Grid:
 
     '''Possible replace for can_swap_right and can_swap_left. Might be able to streamline the code significantly'''
     def can_swap(self, x, y): #can the cell in this position be swapped?
-
-        c0 = not self.can_drop(x,y) #the cell must be on "solid ground"
+        c0 = False
+        if self.get_type(x,y) == "block":
+            c0 = not self.can_drop(x,y) #a "block" cell cannot be swapped if it is falling or able to fall. It must be on "solid ground."
+        elif self.get_type(x,y) == "empty":
+            c0 = self.get_drop_offset(x,y-1) == 0 #an "empty" cell cannot be swapped if there is anything falling into it. However, an empty cell doesn't need to be on "solid ground" to be swapped
+        
         c1 = self.get_swap_offset(x,y) == 0 #the cell can't already be moving to the left or right
-        c2 = self.get_type(x,y) == "block" or self.get_type(x,y) == "empty" #only swap actual blocks or empty cells; can't swap grey or border tiles
 
-        return c0 and c1 and c2
+        return c0 and c1
 
     def has_falling_blocks(self, setup): #does the board have any falling blocks? May not have any uses at the moment, but could prove valuable later
         islooking = False
