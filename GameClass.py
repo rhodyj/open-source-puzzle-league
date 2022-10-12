@@ -164,9 +164,9 @@ class Game:
             for loc in c0.locations: #make sure all cells in the combo are on solid ground (i.e. none can drop)
                 if self.grid.can_drop(loc[0], loc[1]):
                     isbad = True
-            if c0.numblocks < 2 or c0.color == -1:
+            if c0.numblocks < 3 or c0.color == -1:
                 isbad = True
-            if isbad:
+            if not isbad:
                 newcombolist.add(c0) #don't add redundant, falling, short, or non-block combos
     
 
