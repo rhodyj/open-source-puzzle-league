@@ -51,7 +51,7 @@ class Game:
         self.grid = GridClass.Grid(self.setup)
         self.buffer = BufferClass.Buffer(self.setup)
         self.cursor = CursorClass.Cursor(self.difficulty_info["cursor_starting_x"], self.difficulty_info["cursor_starting_y"])
-        self.gcq = set()
+        self.gcq = set() #the GCQ is the global combo queue, a set of valid combos on the board
         self.combodata = []
         self.activecombo = 1
         self.scoreboard = ScoreboardClass.Scoreboard()
@@ -147,74 +147,71 @@ class Game:
             self.graceperiod -= 1 #start counting down until GAME OVER
         else: #but if the top row is clear now
             self.graceperiod = self.setup.grace_period_full #reset the GAME OVER countdown. This would "refill the health bar"
-        
-
-    #TO-DO: Continue from here.
 
 
+    '''This will remove any invalid combos from the combo list of possible combos. A combo may be invalid because its cells are moving (i.e.
+    a falling block is in a space that would be a combo), its cells are part of another combo, or other issues. This combo also merges combos
+    that meet, such as a vertical and horizontal combo that make a plus shape'''
     def clean(self, combolist):
         
-        tmpcombo = ComboClass.Combo()
-        
-        for c0 in combolist.copy(): #for each combo in the list of combos
+        newcombolist = set()
+
+        for c0 in combolist:
             isbad = False
-            for c1 in self.gcq:
-                if len(c0.locations & c1.locations) > 0:
+            for c1 in self.gcq: #gcq is the global combo queue
+                if len(c0.locations & c1.locations) > 0: #make sure no cell in combolist is already a part of an active combo
                     isbad = True
-            for loc in c0.locations:
+            for loc in c0.locations: #make sure all cells in the combo are on solid ground (i.e. none can drop)
                 if self.grid.can_drop(loc[0], loc[1]):
                     isbad = True
-            if c0.numblocks < 3 or c0.color == -1 or isbad:
-                combolist.remove(c0) #remove small, "black/white", or redundant combos
+            if c0.numblocks < 2 or c0.color == -1:
+                isbad = True
+            if isbad:
+                newcombolist.add(c0) #don't add redundant, falling, short, or non-block combos
     
+
+        
+        #some combos can be combined if they meet at a point. For example, a vertical and horizontal combo may combine to make an L or a T. We count this as one combo, a TX-combo
         tx = True
         while tx:
             tx = False #is there a TX Combo?
-            for c1 in combolist.copy():
-                for c2 in combolist.copy():
-                    if c1 != c2 and len(c1.locations) > 2 and len(c2.locations) > 2:
+            combolistcopy = newcombolist.copy() #we plan on iterating through newcombolist and editing the values as we go. To make sure we hit everything, we iterate throgu ha copy of newcombolist instead
+            for c1 in combolistcopy:
+                for c2 in combolistcopy:
+                    if c1 != c2 and c1.locations.isdisjoint(c2.locations): #combine two distinct combos who have at least one block in common
                         
                         txcombo = ComboClass.Combo()
                         txcombo.colors = c1.colors | c2.colors
                         txcombo.locations = c1.locations | c2.locations
                         txcombo.numblocks = len(txcombo.locations)
+                        txcombo.numTX = c1.numTX + c2.numTX + 1 #for the sake of scoring in the future, we count the number of such combos
+                        #no need to edit default value of txcombo.ischain, but that may prove useful later
                         
-                        if txcombo.numblocks < c1.numblocks + c2.numblocks:
-                            tx = True
-                            if c1 in combolist:
-                                combolist.remove(c1)
-                            if c2 in combolist:
-                                combolist.remove(c2)
-                            combolist.add(txcombo)
-                            tmpcombo.numTX += 1
-    
-        for c0 in combolist.copy():
-            tmpcombo.numblocks += c0.numblocks
-            for loc in c0.locations:
-                tmpcombo.colors.add(self.grid.get_color(loc[0], loc[1]))
-                tmpcombo.locations.add((loc[0], loc[1], self.grid.get_color(loc[0], loc[1])))
+                        #WARNING: Iterating through sets in Python might work differently than how I think/hope want it to. This implementation requires further testing
+                        newcombolist.discard(c1)
+                        newcombolist.discard(c2)
+                        newcombolist.add(txcombo)
+
+        '''IMPORTANT IMPLEMENTATION DETAIL: any blocks that connect within the same tick are counted as the same combo, even if they are not touching.
+        This means it is possible to have a combo consisting of multiple disconnected lines and crosses. This may change based on playtesting, but
+        the code reflects this choice'''
+
+        tmpcombo = ComboClass.Combo()
+
+        for c3 in newcombolist:
+            tmpcombo.colors.update(c3.colors)
+            tmpcombo.numblocks += c3.numblocks
+            tmpcombo.numTX += c3.numTX
+            tmpcombo.locations.update(c3.locations)
         
-        for c0 in combolist.copy(): #check if the combo is a chain
-            for loc in c0.locations:
-                if self.grid.get_just_dropped(loc[0], loc[1]):
-                    tmpcombo.ischain = True
-                    
+        for loc in tmpcombo.locations: #check if the combo is a chain
+            if self.grid.get_just_dropped(loc[0], loc[1]):
+                tmpcombo.ischain = True
+
         return tmpcombo
 
-    def combo_check(self):
-        self.swap_blocks((self.cursor.x, self.cursor.y), (self.cursor.x+1, self.cursor.y))
-        foo = self.find_matches()
-        
-        color1 = self.grid.get_color(self.cursor.x, self.cursor.y)
-        color2 = self.grid.get_color(self.cursor.x+1, self.cursor.y)
-        if (self.cursor.x, self.cursor.y, color1) in foo.locations or (self.cursor.x+1, self.cursor.y, color2) in foo.locations:
-            self.swap_blocks((self.cursor.x, self.cursor.y), (self.cursor.x+1, self.cursor.y))
-            return True
-        else:
-            self.swap_blocks((self.cursor.x, self.cursor.y), (self.cursor.x+1, self.cursor.y))
-            return False
-        
-        
+    ##CONTINUE FROM HERE
+
     def find_matches(self):
         
         comboqueue = set()

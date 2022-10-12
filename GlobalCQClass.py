@@ -1,3 +1,5 @@
+#THIS CLASS IS NOT USED IN ANY WAY RIGHT NOW
+
 class GlobalCQ:
     
     def __init__(self):

@@ -8,6 +8,8 @@ import CellClass
 
 import ComboClass
 
+#THIS CLASS IS NOT USED IN ANY WAY RIGHT NOW. Will probably be rewritten as a subclass when the overhaul has progressed enough
+
 class VirtualGame:
     
     def __init__(self, actualsetup, actualcursor, playernumber):

@@ -48,14 +48,14 @@ class GameScreen:
             self.gameover.append(False) #the i-th player has not had a game over yet
             self.games.append(g) #add the newly made game to the list of active games
 
-    # Values from the dictionary that are useful to have immediately
+        # Values from the dictionary that are useful to have immediately
         self.cells_per_row = self.config_info["cells_per_row"]
         self.cells_per_column = self.config_info["cells_per_column"]
         self.cell_dimension = self.config_info["cell_dimension"]
         self.cell_between = self.config_info["cell_between"]
         self.border_dimension = self.config_info["border_dimension"]
 
-    # Calculate dimension of player screens and total dimension of game screen
+        # Calculate dimension of player screens and total dimension of game screen
         self.base_width = self.cells_per_row*(self.cell_dimension + self.cell_between) + self.cell_between #width of board
         self.base_height = self.cells_per_column*(self.cell_dimension + self.cell_between) + self.cell_dimension #height of board
         
@@ -63,16 +63,16 @@ class GameScreen:
         self.actual_height = self.base_height #actual height of game screen
         self.window_size = [self.actual_width, self.actual_height]
         
-    # Draw the board
+        # Draw the board
         self.gamescreen = pygame.display.set_mode(self.window_size)
         pygame.display.set_caption("Open Source Puzzle League")
         
-    # Initialize the timer
+        # Initialize the timer
         self.gameclock = pygame.time.Clock()
 
 
         
-    def draw_border(self):
+    def draw_border(self): #TO-DO: rewrite in terms of cells_per_row and cells_per_column
         for x in range(self.actual_width // self.border_dimension + 1): #How many border tiles to draw horizontally, rounded up
             for y in range(self.actual_height // self.border_dimension + 1): #How many border tiles to draw vertically, rounded up
                 if x == 0 or y == 0 or x == self.actual_width // self.border_dimension or y == self.actual_height // self.border_dimension: #draw only at the border
@@ -101,11 +101,13 @@ class GameScreen:
             game = self.games[i]
             isgameover = self.gameover[i]
 
+            #The actual "game" ends when one of the players has had a game over
             if isgameover == False:
                 if game.player_type == 0: #if the player is a human 
                     if game.button_logic(pygame.event.get()) == -1: #handle player input; calls the function and stops if there's an error
                         return True
                     self.gameover[i] = game.gameloop(self.timer) #has the player lost?
+                #AI system is currently undergoing an overhaul and is not usable right now
                 elif game.player_type == 1: #if the player is an ai
                     if game.ai_logic(pygame.event.get(), self.timer) == -1: #handle AI input; calls the function and stops if there's an error
                         return True
