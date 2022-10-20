@@ -159,13 +159,11 @@ class Game:
         for c0 in combolist:
             isbad = False
             for c1 in self.gcq: #gcq is the global combo queue
-                if len(c0.locations & c1.locations) > 0: #make sure no cell in combolist is already a part of an active combo
+                if len(c0.locations & c1.locations) > 0: #make sure no cell in combolist are already a part of an active combo
                     isbad = True
             for loc in c0.locations: #make sure all cells in the combo are on solid ground (i.e. none can drop)
                 if self.grid.can_drop(loc[0], loc[1]):
                     isbad = True
-            if c0.numblocks < 3 or c0.color == -1:
-                isbad = True
             if not isbad:
                 newcombolist.add(c0) #don't add redundant, falling, short, or non-block combos
     
@@ -210,65 +208,56 @@ class Game:
 
         return tmpcombo
 
-    ##CONTINUE FROM HERE
 
     def find_matches(self):
         
         comboqueue = set()
         
         #Check for Vertical Combos
-        for column in range(self.setup.cells_per_row):
-            contiguous_blocks_matched = 0
-            tmpcombo0 = ComboClass.Combo()
-            current_color = self.grid.get_color(column,0)
+        for column in range(self.setup.cells_per_row): #check for combos in each column, one by one
+
+            tmpcombo = ComboClass.Combo() #keep track of the line of same-colored blocks
+            tmpcombo.colors.add(self.grid.get_color(column, 0))
             
             for row in range(self.setup.cells_per_column):
-                if current_color == self.grid.get_color(column, row):
-                    contiguous_blocks_matched += 1
+                if self.grid.get_color(column, row) in tmpcombo.colors: #since the colors attribute is a set (see IMPORTANT IMPLEMENTATION DETAILS), we check for membership instead of equality
+                    tmpcombo.locations.add((column, row, self.grid.get_color(column, row)))
+                    tmpcombo.numblocks += 1
                 else: #or if the next block is a different color
-                    tmpcombo0.numblocks = contiguous_blocks_matched
-                    for i in range(contiguous_blocks_matched):
-                        tmpcombo0.locations.add((column, row-i-1, current_color))
-                    tmpcombo0.color = current_color
-                    comboqueue.add(tmpcombo0)
-                        
-                    current_color = self.grid.get_color(column,row)
-                    contiguous_blocks_matched = 1
-                    tmpcombo0 = ComboClass.Combo()
+                    if tmpcombo.numblocks > 2 and -1 not in tmpcombo.colors: #only add combos of sufficient length and type
+                        comboqueue.add(tmpcombo) #if the combo is broken, add the previously made combo to the comboqueue
+                    tmpcombo = ComboClass.Combo() #start a new combo
+                    tmpcombo.colors.add(self.grid.get_color(column, row))
+                    tmpcombo.locations.add((column, row, self.grid.get_color(column, row)))
+                    tmpcombo.numblocks = 1
+
+            #when we've gone through the entire column, the last combo won't trigger the "change" flag, so we add whatever's left
+            if tmpcombo.numblocks > 2 and -1 not in tmpcombo.colors:
+                comboqueue.add(tmpcombo)
                             
-            tmpcombo0.numblocks = contiguous_blocks_matched
-            for i in range(contiguous_blocks_matched):
-                tmpcombo0.locations.add((column, row - i, self.grid.get_color(column, row)))
-            tmpcombo0.color = self.grid.get_color(column, row)
-            comboqueue.add(tmpcombo0)
-            
-        #Check for Horizontal Combos    
-        for row in range(self.setup.cells_per_column):
-            contiguous_blocks_matched = 0
-            tmpcombo0 = ComboClass.Combo()
-            current_color = self.grid.get_color(0, row)
+        #Check for horizontal columns. Same setup with different indexing   
+        for row in range(self.setup.cells_per_column): #check for combos in each row
+
+            tmpcombo = ComboClass.Combo()
+            tmpcombo.colors.add(self.grid.get_color(0, row)) #sample the first cell in the ROW this time
             
             for column in range(self.setup.cells_per_row):
-                if current_color == self.grid.get_color(column, row):
-                    contiguous_blocks_matched += 1
-                else: #or if the next block is a different color
-                    tmpcombo0.numblocks = contiguous_blocks_matched
-                    for i in range(contiguous_blocks_matched):
-                        tmpcombo0.locations.add((column-i-1, row, current_color))
-                    tmpcombo0.color = current_color
-                    comboqueue.add(tmpcombo0)
-                        
-                    current_color = self.grid.get_color(column,row)
-                    contiguous_blocks_matched = 1
-                    tmpcombo0 = ComboClass.Combo()
-                            
-            tmpcombo0.numblocks = contiguous_blocks_matched
-            for i in range(contiguous_blocks_matched):
-                tmpcombo0.locations.add((column-i, row, self.grid.get_color(column, row)))
-            tmpcombo0.color = self.grid.get_color(column, row)
-            comboqueue.add(tmpcombo0)
-    
-    
+                if self.grid.get_color(column, row) in tmpcombo.colors: 
+                    tmpcombo.locations.add((column, row, self.grid.get_color(column, row)))
+                    tmpcombo.numblocks += 1
+                else:
+                    if tmpcombo.numblocks > 2 and -1 not in tmpcombo.colors:
+                        comboqueue.add(tmpcombo)
+                    tmpcombo = ComboClass.Combo()
+                    tmpcombo.colors.add(self.grid.get_color(column, row))
+                    tmpcombo.locations.add((column, row, self.grid.get_color(column, row)))
+                    tmpcombo.numblocks = 1
+
+            if tmpcombo.numblocks > 2 and -1 not in tmpcombo.colors:
+                comboqueue.add(tmpcombo) 
+
+        
+        #clean up the queue
         newbigcombo = self.clean(comboqueue)
         
         return newbigcombo
@@ -276,20 +265,20 @@ class Game:
     def move_blocks(self):
         for column in range(self.setup.cells_per_row):
             for row in range(self.setup.cells_per_column):
-                if self.grid.get_swap_offset(column, row) > 0:
+                #we want swap_offset 0 to be neutral, so we have to count up and down and then set back to 0 when the swapping is done
+                if self.grid.get_swap_offset(column, row) > 0: #positive swap offset means the block is moving to the right
                     self.grid.set_swap_offset(column, row, self.grid.get_swap_offset(column, row) + self.setup.cell_swap_speed)
-                elif self.grid.get_swap_offset(column, row) < 0:
+                elif self.grid.get_swap_offset(column, row) < 0: #negative swap offset means the block is moving to the left
                     self.grid.set_swap_offset(column, row, self.grid.get_swap_offset(column, row) - self.setup.cell_swap_speed)
+
                 if self.grid.get_swap_offset(column, row) > self.setup.cell_dimension:
                     self.swap_blocks((column, row), (column+1, row))
                     self.grid.set_swap_offset(column, row, 0)
                     
                 elif self.grid.get_swap_offset(column, row) < -1*self.setup.cell_dimension:
                     self.grid.set_swap_offset(column, row, 0)
-                        
 
-                
-                        
+    ##CONTINUE FROM HERE
 
     def pop_combos(self, combo):
         pop = False        
@@ -316,8 +305,6 @@ class Game:
     def combo_blocks(self):
         
         newcombos = self.find_matches()
-        
-        
         
         if newcombos.numblocks > 0:
             
