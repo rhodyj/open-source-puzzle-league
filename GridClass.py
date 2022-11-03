@@ -86,25 +86,6 @@ class Grid:
         
         return c0 and c1 and (c2 or c3)
 
-    def can_swap_right(self, x, y): #can the cell be moved/swapped TO THE RIGHT by the player?
-
-        c0 = not self.can_drop(x,y) #the player may only swap cells that aren't mid-fall (i.e. that cannot drop any further)
-        c1 = self.get_swap_offset(x,y) == 0 #the cell can't already be moving to the left or right
-        c2 = self.get_type(x+1,y) == "block" or self.get_type(x+1, y) == "empty" #the target position must be either empty or a different cell
-        c3 = self.get_drop_offset(x, y-1) == 0 #there can't be anything dropping into the cell; can only fail if the cell is empty (or something already went wrong)
-
-        return c0 and c1 and c2 and c3
-    
-    def can_swap_left(self, x, y): #can the cell be moved/swapped TO THE LEFT by the player? Same format as can_swap_right, but indices are changed
-
-        c0 = not self.can_drop(x,y) #the player may only swap cells that aren't mid-fall (i.e. that cannot drop any further)
-        c1 = self.get_swap_offset(x,y) == 0 #the cell can't already be moving to the left or right
-        c2 = self.get_type(x,y) == "block" or self.get_type(x, y) == "empty" #the target position must be either empty or a different cell
-        c3 = self.get_drop_offset(x, y-1) == 0 #there can't be anything dropping into the cell; can only fail if the cell is empty (or something already went wrong)
-
-        return c0 and c1 and c2 and c3
-
-    '''Possible replace for can_swap_right and can_swap_left. Might be able to streamline the code significantly'''
     def can_swap(self, x, y): #can the cell in this position be swapped?
         c0 = False
         if self.get_type(x,y) == "block":
@@ -124,38 +105,3 @@ class Grid:
                     islooking = True
                     
         return islooking
-        
-
-                            
-                        
-
-
-
-        
-
-
-        
-        
-
-
-        
-        
-
-
-        
-                        
-        
-        
-        
-                
-                        
-                        
-                        
-                    
-                    
-        
-                
-        
-
-
-        

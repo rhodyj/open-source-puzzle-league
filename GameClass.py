@@ -262,44 +262,46 @@ class Game:
         
         return newbigcombo
     
-    def move_blocks(self):
+    def move_blocks(self): #Handles moving blocks side-to-side when swapped by the cursor
         for column in range(self.setup.cells_per_row):
             for row in range(self.setup.cells_per_column):
                 #we want swap_offset 0 to be neutral, so we have to count up and down and then set back to 0 when the swapping is done
                 if self.grid.get_swap_offset(column, row) > 0: #positive swap offset means the block is moving to the right
-                    self.grid.set_swap_offset(column, row, self.grid.get_swap_offset(column, row) + self.setup.cell_swap_speed)
+                    self.grid.set_swap_offset(column, row, self.grid.get_swap_offset(column, row) + self.setup.cell_swap_speed) #increment the offset
                 elif self.grid.get_swap_offset(column, row) < 0: #negative swap offset means the block is moving to the left
                     self.grid.set_swap_offset(column, row, self.grid.get_swap_offset(column, row) - self.setup.cell_swap_speed)
 
-                if self.grid.get_swap_offset(column, row) > self.setup.cell_dimension:
+                if self.grid.get_swap_offset(column, row) > self.setup.cell_dimension: #when the cell has moved enough visually, we swap the data in the cells
                     self.swap_blocks((column, row), (column+1, row))
                     self.grid.set_swap_offset(column, row, 0)
-                    
                 elif self.grid.get_swap_offset(column, row) < -1*self.setup.cell_dimension:
                     self.grid.set_swap_offset(column, row, 0)
 
-    ##CONTINUE FROM HERE
+    def pop_combos(self, combo): #Handles the fade-out of the combos listed in "combo"
 
-    def pop_combos(self, combo):
-        pop = False        
-        for row in range(0, self.setup.cells_per_column,1):
+        pop = False
+        '''KNOWN ISSUE: The current code allows a combo added later at lower position to skip to the front of the combo queue. This WILL be addressed
+        soon. Possible solutions include: keeping track of the "active combo", making the combo queue FIFO instead of just a set. I must decide on
+        the best solution.
+        '''
+        for row in range(self.setup.cells_per_column): #The for loop is ordered this way so that we move from left to right, bottom to top
             for column in range(self.setup.cells_per_row):
-                #if column in combo.locations[0] and row in combo.locations[1]:
                 if (column, row, self.grid.get_color(column, row)) in combo.locations:
+
+                    '''This marks any unmarked combos in the queue by using get_curr_fade to set the cell's combotimer to 1 (intending 
+                    to count up to combo_fade_time) and setting the cell's type to "grey" '''
                     if self.grid.get_curr_fade(column, row) == 0 and self.grid.get_type(column, row) != "grey":
                         self.grid.set_curr_fade(column, row, 1) #mark all combos to be popped
                         self.grid.set_type(column, row, "grey")
-                        #print("Marking for deletion: " + str((column, row))) 
                     
+                    '''Increment the combotimer. This is fairly memory-inefficient and could be done better.'''
                     if self.grid.get_curr_fade(column, row) < self.setup.combo_fade_time and pop == False:
         
                         if self.grid.get_curr_fade(column, row) == 1:
-                            pygame.mixer.Sound.play(self.setup.action_sounds[0])#PLAY EXPLOSION SOUND
+                            pygame.mixer.Sound.play(self.setup.action_sounds[0]) #Play the explosion sound when a cell "takes its turn"
         
                         self.grid.set_curr_fade(column, row, self.grid.get_curr_fade(column, row) + 1)
-                            #print("Fully deleted: " + str((column, row)))
-        
-                            #print(str(self.grid.get_curr_fade(column, row)) + " tics left for " + str((column, row)))
+
                         pop = True
                 
     def combo_blocks(self):
@@ -384,29 +386,35 @@ class Game:
                 return -1
             
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_LEFT and self.cursor.x != 0:
+                if event.key == pygame.K_LEFT and self.cursor.x > 0:
                     self.cursor.x -= 1
-                elif event.key == pygame.K_RIGHT and self.cursor.x != self.setup.cells_per_row-2:
+                elif event.key == pygame.K_RIGHT and self.cursor.x < self.setup.cells_per_row-2: #since the cursor extends to the right, cursor.x MUST NOT be in the last column
                     self.cursor.x += 1
-                elif event.key == pygame.K_UP and self.cursor.y != 1:
+                elif event.key == pygame.K_UP and self.cursor.y > 0:
                     self.cursor.y -= 1
-                elif event.key == pygame.K_DOWN and self.cursor.y != self.setup.cells_per_column-1:
+                elif event.key == pygame.K_DOWN and self.cursor.y < self.setup.cells_per_column-1:
                     self.cursor.y += 1
-                elif event.key == pygame.K_SPACE:
-                    if self.grid.can_swap_right(self.cursor.x, self.cursor.y) and self.grid.can_swap_left(self.cursor.x+1, self.cursor.y):
-                        if self.grid.get_type(self.cursor.x, self.cursor.y) == "block" or self.grid.get_type(self.cursor.x+1, self.cursor.y) == "block":
+                elif event.key == pygame.K_SPACE: #Swap the cells
+                    if self.grid.can_swap(self.cursor.x, self.cursor.y) and self.grid.can_swap(self.cursor.x+1, self.cursor.y):
+                        if self.grid.get_type(self.cursor.x, self.cursor.y) == "block" or self.grid.get_type(self.cursor.x+1, self.cursor.y) == "block": #at least one of the target cells must be a block (e.g. don't swap two empty cells)
+                            
+                            '''This part deserves explanation: initialoffset is intended to be "spatial padding" to make sure that adding cell_swap_speed
+                            repeatedly results in a sum of exactly cell_dimension at some point. For example, if cell_swap_speed is 7 and cell_dimension is 25,
+                            initialoffset is 4 because 4 + 7 + 7 + 7 = 25. However, since a grid space with swap_offset of 0 is in its "normal state" and not
+                            flagged to be swapped, if cell_dimension is divisible by cell_swap_speed, we risk not properly setting the flag. If cell_swap_speed
+                            is 5 and cell_dimension is 25, this would cause an error since no padding is needed. Hence, if initialoffset is 0, we pad it with the
+                            value of cell_swap_speed so properly raise the flag. TO-DO: MAKE THIS BETTER. IMPLEMENT ACTUAL FLAGS
+                            '''
                             initialoffset = self.setup.cell_dimension % self.setup.cell_swap_speed
                             if initialoffset == 0:
                                 initialoffset = self.setup.cell_swap_speed
+
                             self.grid.set_swap_offset(self.cursor.x, self.cursor.y, initialoffset)
                             self.grid.set_swap_offset(self.cursor.x+1, self.cursor.y, -1*initialoffset)
-                            '''
-                            if self.player_type == 1:
-                                self.vgame.vgrid.set_swap_offset(self.cursor.x, self.cursor.y, initialoffset)
-                                self.vgame.vgrid.set_swap_offset(self.cursor.x+1, self.cursor.y, -1*initialoffset)
-                            '''
         return 0
     
+    #CURRENTLY NOT USED
+
     def ai_logic(self, eventqueue, timer):
         for event in eventqueue:  # User did something
             if event.type == pygame.QUIT:  # If user clicked close
@@ -423,7 +431,7 @@ class Game:
             elif command == "MOVEDOWN" and self.cursor.y != self.setup.cells_per_column-1:
                 self.cursor.y += 1
             elif command == "SWAP":
-                if self.grid.can_swap_right(self.cursor.x, self.cursor.y) and self.grid.can_swap_left(self.cursor.x+1, self.cursor.y):
+                if self.grid.can_swap(self.cursor.x, self.cursor.y) and self.grid.can_swap(self.cursor.x+1, self.cursor.y):
                     initialoffset = self.setup.cell_dimension % self.setup.cell_swap_speed
                     if initialoffset == 0:
                         initialoffset = self.setup.cell_swap_speed

@@ -16,6 +16,3 @@ class Buffer:
                 self.colorarray[column] = -1
             else:
                 self.colorarray[column] = random.randint(0,4)
-    
-
-        

@@ -88,14 +88,14 @@ class VirtualGame:
         numleft = 0
         counterleft = 1
         
-        while (column-counterleft, row) not in self.goals and self.vgrid.can_swap_right(column-counterleft, row): #canswapright might need reworking
+        while (column-counterleft, row) not in self.goals and self.vgrid.can_swap(column-counterleft, row): #canswapright might need reworking
             if self.vgrid.get_color(column-counterleft, row) == color:
                 numleft += 1
             counterleft += 1
         
         numright = 0
         counterright = 1
-        while (column+counterright, row) not in self.goals and self.vgrid.can_swap_left(column+counterright, row): #canswapleft might need some reworking
+        while (column+counterright, row) not in self.goals and self.vgrid.can_swap(column+counterright, row): #canswapleft might need some reworking
             if self.vgrid.get_color(column+counterright, row) == color:
                 numright += 1
             counterright += 1
