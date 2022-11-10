@@ -12,9 +12,6 @@ class Setup:
         self.BLUE = (0, 0, 255)
         self.YELLOW = (255, 255, 0)
         self.PURPLE = (255, 0, 255)
-    # Set up the font
-        self.fontsize = 20
-        self.font = pygame.font.SysFont('Consolas', self.fontsize, True, False)
 
     # Load the cell images  
         self.cell_type_array = ["Blocks/block1.png", "Blocks/block2.png", "Blocks/block3.png", "Blocks/block4.png", "Blocks/block5.png"]
@@ -49,3 +46,7 @@ class Setup:
         self.board_raise_rate = difficultyinfo["board_raise_rate"] #how fast does the board raise?
 
         self.grace_period_full = difficultyinfo["grace_period"] #how long can the board stay "topped out" before the game results in game over? Think of a bar that lowers when any column is full
+
+        # Set up the font
+        self.fontsize = self.cell_dimension
+        self.font = pygame.font.SysFont('Consolas', self.fontsize, True, False)

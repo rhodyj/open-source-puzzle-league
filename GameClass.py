@@ -1,4 +1,5 @@
 import pygame
+import warnings
 
 import CursorClass
 import SetupClass
@@ -40,7 +41,7 @@ class Game:
                 missingkeys.append(key)
 
         #if any parameter is missing, end the program and report the error
-        assert len(missingkeys) == 0, f"Missing difficult info: {missingkeys}"
+        assert not missingkeys, f"Missing difficult info: {missingkeys}" #Truth Value Testing to assert that missingkeys is empty
 
     # Store the info
         self.player_number = playernumber #the number of the player, zero-indexed: Player 0, Player 1, Player 2, etc.
@@ -51,9 +52,11 @@ class Game:
         self.grid = GridClass.Grid(self.setup)
         self.buffer = BufferClass.Buffer(self.setup)
         self.cursor = CursorClass.Cursor(self.difficulty_info["cursor_starting_x"], self.difficulty_info["cursor_starting_y"])
-        self.gcq = set() #the GCQ is the global combo queue, a set of valid combos on the board
-        self.combodata = []
-        self.activecombo = 1
+        self.board_raise_flag = False #Is the player holding the button that raises the board?
+        self.active_chains = [] #a list of all combos, i.e. everything marked for deletion
+        self.total_combos = 0 #the total number of combos made in this game. Used to assign each combo a unique ID number, which is to be used in some flags
+        self.total_chains = 0 #the total number of combo chains made in the game. Similar to total_combos, but a chain is a list of combos performed in a timed sequence
+        self.active_combo_length = 0
         self.scoreboard = ScoreboardClass.Scoreboard()
         self.graceperiod = self.difficulty_info["grace_period"]
         
@@ -100,12 +103,14 @@ class Game:
         
         if self.graceperiod == self.setup.grace_period_full: #if the grace period "health bar" is "full" (see SetupClass.py), we can raise the board
             
-            #move the board up one pixel
-            boff = (boff + 1) % self.setup.cell_dimension
-            self.grid.set_board_offset(boff)
+            #move the board up
+            if self.board_raise_flag:
+                boff = boff + 5 #if the button is held, go up faster
+            else:
+                boff = boff + 1
             
             #if the board was raised enough to add a new row
-            if boff == 0:
+            if boff >= self.setup.cell_dimension:
 
                 #Move every cell up one position
                 for column in range(self.setup.cells_per_row):
@@ -127,17 +132,15 @@ class Game:
                     self.grid.set_type(column, self.setup.cells_per_column-1, "block")
                 
                 #move the cursor's position up one, so that it remains on the blocks it was on previously
-                if self.cursor.y > 1:
-                    self.cursor.y -= 1
+                if self.cursor.get_y() > 1:
+                    self.cursor.move_down()
+
 
                 #Once all blocks have been moved up, refill the buffer
                 self.buffer.spawn_blocks(self.setup)
-                
-                '''
-                if self.playertype == 1:
-                    self.vgame.v_copy_grid(self.grid)
-                    self.vgame.reset_goals()
-                '''
+        
+            self.grid.set_board_offset(boff % self.setup.cell_dimension) #sets the board offset correctly. The modulo handles the case where boff >= cell_dimension
+        
         #check if any cell in the top row is not empty (i.e. if any column is touching the top of the board)
         for column in range(self.setup.cells_per_row):
             if self.grid.get_type(column, 0) != "empty":
@@ -156,16 +159,18 @@ class Game:
         
         newcombolist = set()
 
-        for c0 in combolist:
+        for c in combolist:
             isbad = False
-            for c1 in self.gcq: #gcq is the global combo queue
-                if len(c0.locations & c1.locations) > 0: #make sure no cell in combolist are already a part of an active combo
-                    isbad = True
-            for loc in c0.locations: #make sure all cells in the combo are on solid ground (i.e. none can drop)
-                if self.grid.can_drop(loc[0], loc[1]):
+            for chain in self.active_chains:
+                for combo in chain:
+                    if len(c.locationdata & combo.locationdata) > 0: #make sure no cell in combolist are already a part of an active combo
+                        isbad = True
+            for loc in c.locationdata: #make sure all cells in the combo are on solid ground (i.e. none can drop)
+                x,y = loc
+                if self.grid.can_drop(x,y):
                     isbad = True
             if not isbad:
-                newcombolist.add(c0) #don't add redundant, falling, short, or non-block combos
+                newcombolist.add(c) #don't add redundant, falling, short, or non-block combos
     
 
         
@@ -176,12 +181,12 @@ class Game:
             combolistcopy = newcombolist.copy() #we plan on iterating through newcombolist and editing the values as we go. To make sure we hit everything, we iterate throgu ha copy of newcombolist instead
             for c1 in combolistcopy:
                 for c2 in combolistcopy:
-                    if c1 != c2 and c1.locations.isdisjoint(c2.locations): #combine two distinct combos who have at least one block in common
+                    if c1 != c2 and c1.locationdata.isdisjoint(c2.locationdata): #combine two distinct combos who have at least one block in common
                         
-                        txcombo = ComboClass.Combo()
+                        txcombo = ComboClass.ProtoCombo()
                         txcombo.colors = c1.colors | c2.colors
-                        txcombo.locations = c1.locations | c2.locations
-                        txcombo.numblocks = len(txcombo.locations)
+                        txcombo.locationdata = c1.locationdata | c2.locationdata
+                        txcombo.numblocks = len(txcombo.locationdata)
                         txcombo.numTX = c1.numTX + c2.numTX + 1 #for the sake of scoring in the future, we count the number of such combos
                         #no need to edit default value of txcombo.ischain, but that may prove useful later
                         
@@ -194,17 +199,36 @@ class Game:
         This means it is possible to have a combo consisting of multiple disconnected lines and crosses. This may change based on playtesting, but
         the code reflects this choice'''
 
-        tmpcombo = ComboClass.Combo()
+        '''Finally, put all the contents of newcombolist into a single proper combo, fully pruned and cleaned. This also orders it for deletion:
+        top row to bottom row; within the same row, left to right'''
 
-        for c3 in newcombolist:
-            tmpcombo.colors.update(c3.colors)
-            tmpcombo.numblocks += c3.numblocks
-            tmpcombo.numTX += c3.numTX
-            tmpcombo.locations.update(c3.locations)
-        
-        for loc in tmpcombo.locations: #check if the combo is a chain
-            if self.grid.get_just_dropped(loc[0], loc[1]):
-                tmpcombo.ischain = True
+        #first, check if this is a continuation of an existing chain OR the start of a new chain
+
+        chain_flag = False
+
+        for c in newcombolist: #check if the combo is a chain
+            for loc in c.locationdata:
+                x,y = loc
+                if self.grid.get_just_dropped(x,y):
+                    chain_flag = True
+
+        #We update the values of total_combos and total_chains later, but we use their new and past values now
+        if chain_flag:
+            tmpcombo = ComboClass.Combo(self.total_combos, self.total_chains) #If this combo resulted from a non-falling block, it end the chain and creates a new one
+        else:
+            tmpcombo = ComboClass.Combo(self.total_combos, self.total_chains+1) #If this combo resulted from a falling block, it continues the chain
+
+        for c in newcombolist:
+            tmpcombo.colors.update(c.colors)
+            tmpcombo.numblocks += c.numblocks
+            tmpcombo.numTX += c.numTX
+            tmpcombo.locationdata.update(c.locationdata)
+
+        for row in range(self.setup.cells_per_column):
+            for column in range(self.setup.cells_per_row):
+                for c in newcombolist:
+                    if (column, row) in c.locationdata:
+                        tmpcombo.locations.append((column, row))
 
         return tmpcombo
 
@@ -216,19 +240,19 @@ class Game:
         #Check for Vertical Combos
         for column in range(self.setup.cells_per_row): #check for combos in each column, one by one
 
-            tmpcombo = ComboClass.Combo() #keep track of the line of same-colored blocks
+            tmpcombo = ComboClass.ProtoCombo() #keep track of the line of same-colored blocks
             tmpcombo.colors.add(self.grid.get_color(column, 0))
             
             for row in range(self.setup.cells_per_column):
                 if self.grid.get_color(column, row) in tmpcombo.colors: #since the colors attribute is a set (see IMPORTANT IMPLEMENTATION DETAILS), we check for membership instead of equality
-                    tmpcombo.locations.add((column, row, self.grid.get_color(column, row)))
+                    tmpcombo.locationdata.add((column, row))
                     tmpcombo.numblocks += 1
                 else: #or if the next block is a different color
                     if tmpcombo.numblocks > 2 and -1 not in tmpcombo.colors: #only add combos of sufficient length and type
-                        comboqueue.add(tmpcombo) #if the combo is broken, add the previously made combo to the comboqueue
-                    tmpcombo = ComboClass.Combo() #start a new combo
+                        comboqueue.add(tmpcombo) #if the new colored block would break the combo, add the previously made combo to the comboqueue
+                    tmpcombo = ComboClass.ProtoCombo()
                     tmpcombo.colors.add(self.grid.get_color(column, row))
-                    tmpcombo.locations.add((column, row, self.grid.get_color(column, row)))
+                    tmpcombo.locationdata.add((column, row))
                     tmpcombo.numblocks = 1
 
             #when we've gone through the entire column, the last combo won't trigger the "change" flag, so we add whatever's left
@@ -238,25 +262,29 @@ class Game:
         #Check for horizontal columns. Same setup with different indexing   
         for row in range(self.setup.cells_per_column): #check for combos in each row
 
-            tmpcombo = ComboClass.Combo()
+            tmpcombo = ComboClass.ProtoCombo()
             tmpcombo.colors.add(self.grid.get_color(0, row)) #sample the first cell in the ROW this time
             
             for column in range(self.setup.cells_per_row):
                 if self.grid.get_color(column, row) in tmpcombo.colors: 
-                    tmpcombo.locations.add((column, row, self.grid.get_color(column, row)))
+                    tmpcombo.locationdata.add((column, row))
                     tmpcombo.numblocks += 1
                 else:
                     if tmpcombo.numblocks > 2 and -1 not in tmpcombo.colors:
                         comboqueue.add(tmpcombo)
-                    tmpcombo = ComboClass.Combo()
+                    tmpcombo = ComboClass.ProtoCombo()
                     tmpcombo.colors.add(self.grid.get_color(column, row))
-                    tmpcombo.locations.add((column, row, self.grid.get_color(column, row)))
+                    tmpcombo.locationdata.add((column, row))
                     tmpcombo.numblocks = 1
 
             if tmpcombo.numblocks > 2 and -1 not in tmpcombo.colors:
-                comboqueue.add(tmpcombo) 
+                comboqueue.add(tmpcombo)
 
-        
+        '''At this point, "comboqueue" is just a set of all things on the board that could be considered a combo based on number of consecutive cells
+        and their color. It does not check for whether these combos are valid within the game. Examples of invalid combos include cells that are falling
+        or cells that are already marked for deletion (i.e. part of an active combo). We use the "clean" function to check these, and to combine all of these
+        pieces into a single combo. This means that two vertical columns that are not touching each other count as one single "combo" when determining
+        the length of a combo chain. This was a conscious design choice.'''
         #clean up the queue
         newbigcombo = self.clean(comboqueue)
         
@@ -278,104 +306,103 @@ class Game:
                     self.grid.set_swap_offset(column, row, 0)
 
     def pop_combos(self, combo): #Handles the fade-out of the combos listed in "combo"
-
-        pop = False
-        '''KNOWN ISSUE: The current code allows a combo added later at lower position to skip to the front of the combo queue. This WILL be addressed
-        soon. Possible solutions include: keeping track of the "active combo", making the combo queue FIFO instead of just a set. I must decide on
-        the best solution.
-        '''
-        for row in range(self.setup.cells_per_column): #The for loop is ordered this way so that we move from left to right, bottom to top
-            for column in range(self.setup.cells_per_row):
-                if (column, row, self.grid.get_color(column, row)) in combo.locations:
-
-                    '''This marks any unmarked combos in the queue by using get_curr_fade to set the cell's combotimer to 1 (intending 
-                    to count up to combo_fade_time) and setting the cell's type to "grey" '''
-                    if self.grid.get_curr_fade(column, row) == 0 and self.grid.get_type(column, row) != "grey":
-                        self.grid.set_curr_fade(column, row, 1) #mark all combos to be popped
-                        self.grid.set_type(column, row, "grey")
-                    
-                    '''Increment the combotimer. This is fairly memory-inefficient and could be done better.'''
-                    if self.grid.get_curr_fade(column, row) < self.setup.combo_fade_time and pop == False:
         
-                        if self.grid.get_curr_fade(column, row) == 1:
-                            pygame.mixer.Sound.play(self.setup.action_sounds[0]) #Play the explosion sound when a cell "takes its turn"
-        
-                        self.grid.set_curr_fade(column, row, self.grid.get_curr_fade(column, row) + 1)
+        for loc in combo.locations: #We first mark everything for deletion
+            x,y = loc
+            if self.grid.get_curr_fade(x, y) == 0:
+                self.grid.mark_for_deletion(x, y) #mark all combos to be popped
 
-                        pop = True
+        for loc in combo.locations: #Remember: Combos are ordered bottom-up, then left-right
+            x,y = loc
+            if self.grid.get_curr_fade(x, y) < self.setup.combo_fade_time:
+                #If a particular cell is starting its animation, play a sound
+                if self.grid.get_curr_fade(x, y) == 1:
+                    pygame.mixer.Sound.play(self.setup.action_sounds[0])
+
+                #Increase the fade value. Higher fade means further into the deletion animation.
+                self.grid.fade(x, y)
+                break #and only incrementation per loop
                 
     def combo_blocks(self):
         
         newcombos = self.find_matches()
         
         if newcombos.numblocks > 0:
-            
-            #print(newcombos.locations)
-            self.gcq.add(newcombos)
-              
-            if newcombos.ischain:    
-                self.activecombo = self.activecombo+1
-                print("Combo x" + str(self.activecombo))
-                self.combodata.append(newcombos)
+            print("New combo detected")
+            self.total_combos += 1
+
+            #if the combo was dropped or if there were no active combos to begin with, we make a new chain. Otherwise, we just add the combo to the last chain in active_chains
+            if newcombos.chain_id > self.total_chains or not self.active_chains: #Truth Value Testing on self.active_chains
+                print("It's a new chain")
+                self.active_chains.append([newcombos])
+                self.total_chains += 1
+                self.active_combo_length = 0
             else:
-                if self.activecombo > 1:
-                    print("Combo Dropped due to Asynch")
-                self.activecombo = 1
-                self.combodata = [newcombos]
+                self.active_chains[-1].append(newcombos) #add to the end of the last item in the list of lists
+                self.active_combo_length += 1
+                print("It's a continuation fo a chain")
 
-            '''
-            if self.player_type == 1:
-                self.vgame.v_copy_gcq(self.gcq)
-            '''
-
-        if not self.grid.has_falling_blocks(self.setup) and len(self.gcq) == 0:
-            if self.activecombo > 1:
-                print("Combo Dropped due to inactivity")
-            self.activecombo = 1
-            self.combodata = []
+            #REMARK: Realistically, active_chains will probably never be more than 3 elements long. This approach, however, allows the code to handle multiple "big blob" combos that may take a while to disappear
                 
-        to_be_removed = set()
-        
-        for combo in self.gcq: 
-            fooflag = False
-            for cell in combo.locations:
-                if self.grid.get_curr_fade(cell[0], cell[1]) != self.setup.combo_fade_time:
-                    fooflag = True
-                    
-            if fooflag:
-                self.pop_combos(combo)
-            else:
-                for cell in combo.locations:
-                    self.grid.set_curr_fade(cell[0], cell[1], 0)
-                    self.grid.set_type(cell[0], cell[1], "empty")
-                    self.grid.set_color(cell[0], cell[1], -1)
-                    if self.player_type == 1:
-                        if (cell[0], cell[1]) in self.vgame.goals:
-                            self.vgame.goals.remove((cell[0], cell[1]))
-                to_be_removed.add(combo)
-        
-        for tbr in to_be_removed:
-            self.gcq.remove(tbr)
-            
+        tmp_active_chains = [] #We want to prune any finished combos from active_chains, so we make a copy and ADD the UNFINISHED combos to it
 
+        for chain in self.active_chains:
+            tmp_chain = []
+            for combo in chain:
+                combo_completed = True
+
+                '''We raise a flag if any of the cells set to be deleted have not been deleted. There are three cases: 
+                    (a) If curr_fade is 0, then the cell hasn't been marked for deletion
+                    (b) If curr_fade is less than combo_fade_timer, then the cell is partially deleted
+                    (c) If curr_fade is equal to combo_fade_timer, then the cell is totally deleted
+                We need ALL of the cells in a combo to be in case (c) before we can remove the cell from the chain''' 
+                for cell in combo.locations:
+                    x,y = cell
+                    if self.grid.get_curr_fade(x, y) != self.setup.combo_fade_time:
+                        combo_completed = False
+                    
+                if not combo_completed:
+                    self.pop_combos(combo)
+                    tmp_chain.append(combo)
+                else:
+                    print("MARKING FOR DELETION")
+                    for cell in combo.locations:
+                        x,y = cell
+                        self.grid.set_to_empty(x, y)
+
+            if tmp_chain: #If tmp_chain is not empty, add it to tmp_active_chains. LESSON FOR MYSELF: Don't get arrogant with built-in types.
+                tmp_active_chains.append(tmp_chain)
+
+        self.active_chains = tmp_active_chains
+            
                         
                   
     def drop_blocks(self):
         
         for column in range(self.setup.cells_per_row):
             for row in range(self.setup.cells_per_column-1, 0, -1): #go from bottom to top
-                if self.grid.get_just_dropped(column, row):
+
+                if self.grid.get_just_dropped(column, row): #update this flag for combo timing
                     self.grid.set_just_dropped(column, row, False)
-                if self.grid.can_drop(column, row): #if the next lowest block is empty, but not a part of a combo
+
+                #drop any block that is allowed
+                if self.grid.can_drop(column, row):
                     if self.grid.get_drop_offset(column, row) == 0:
+
+                        '''Same explanation as in the "button logic" section in the next function'''
                         initialoffset = self.setup.cell_dimension % self.setup.cell_drop_speed
                         if initialoffset == 0:
                             initialoffset = self.setup.cell_drop_speed
+                    
                         self.grid.set_drop_offset(column, row, initialoffset)
-                    elif self.grid.get_drop_offset(column, row) >= self.setup.cell_dimension:
+
+                    elif self.grid.get_drop_offset(column, row) >= self.setup.cell_dimension: #if the block has dropped enough
+
                         self.grid.set_drop_offset(column, row, 0)
-                        self.swap_blocks((column, row), (column, row+1))
-                        self.grid.set_just_dropped(column, row+1, True)
+                        if not self.grid.can_drop(column, row): #if the block lands on solid ground, set the "just dropped" flag for the rest of the code TO-DO Test this added check
+                            self.grid.set_just_dropped(column, row, True)
+                        self.swap_blocks((column, row), (column, row+1)) #another use of swap_blocks, and this should ALWAYS functionally swap a cell and an empty block
+
                     elif self.grid.get_drop_offset(column, row) > 0:
                         self.grid.set_drop_offset(column, row, self.grid.get_drop_offset(column, row) + self.setup.cell_drop_speed)
 
@@ -386,17 +413,17 @@ class Game:
                 return -1
             
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_LEFT and self.cursor.x > 0:
-                    self.cursor.x -= 1
-                elif event.key == pygame.K_RIGHT and self.cursor.x < self.setup.cells_per_row-2: #since the cursor extends to the right, cursor.x MUST NOT be in the last column
-                    self.cursor.x += 1
-                elif event.key == pygame.K_UP and self.cursor.y > 0:
-                    self.cursor.y -= 1
-                elif event.key == pygame.K_DOWN and self.cursor.y < self.setup.cells_per_column-1:
-                    self.cursor.y += 1
+                if event.key == pygame.K_LEFT and self.cursor.get_x() > 0:
+                    self.cursor.move_left()
+                elif event.key == pygame.K_RIGHT and self.cursor.get_x() < self.setup.cells_per_row-2: #since the cursor extends to the right, cursor.get_x() MUST NOT be in the last column
+                    self.cursor.move_right()
+                elif event.key == pygame.K_UP and self.cursor.get_y() > 0:
+                    self.cursor.move_up()
+                elif event.key == pygame.K_DOWN and self.cursor.get_y() < self.setup.cells_per_column-1:
+                    self.cursor.move_down()
                 elif event.key == pygame.K_SPACE: #Swap the cells
-                    if self.grid.can_swap(self.cursor.x, self.cursor.y) and self.grid.can_swap(self.cursor.x+1, self.cursor.y):
-                        if self.grid.get_type(self.cursor.x, self.cursor.y) == "block" or self.grid.get_type(self.cursor.x+1, self.cursor.y) == "block": #at least one of the target cells must be a block (e.g. don't swap two empty cells)
+                    if self.grid.can_swap(self.cursor.get_x(), self.cursor.get_y()) and self.grid.can_swap(self.cursor.get_x()+1, self.cursor.get_y()):
+                        if self.grid.get_type(self.cursor.get_x(), self.cursor.get_y()) == "block" or self.grid.get_type(self.cursor.get_x()+1, self.cursor.get_y()) == "block": #at least one of the target cells must be a block (e.g. don't swap two empty cells)
                             
                             '''This part deserves explanation: initialoffset is intended to be "spatial padding" to make sure that adding cell_swap_speed
                             repeatedly results in a sum of exactly cell_dimension at some point. For example, if cell_swap_speed is 7 and cell_dimension is 25,
@@ -409,8 +436,17 @@ class Game:
                             if initialoffset == 0:
                                 initialoffset = self.setup.cell_swap_speed
 
-                            self.grid.set_swap_offset(self.cursor.x, self.cursor.y, initialoffset)
-                            self.grid.set_swap_offset(self.cursor.x+1, self.cursor.y, -1*initialoffset)
+                            self.grid.set_swap_offset(self.cursor.get_x(), self.cursor.get_y(), initialoffset)
+                            self.grid.set_swap_offset(self.cursor.get_x()+1, self.cursor.get_y(), -1*initialoffset)
+
+            if pygame.event == pygame.KEYUP:
+                if event.key == pygame.LSHIFT:
+                    self.board_raise_flag = False
+
+        if not (self.board_raise_flag == pygame.key.get_pressed()[pygame.K_LSHIFT]):
+            warnings.warn("board_raise_flag out of sync with keyboard input. Correcting...")
+            self.board_raise_flag = pygame.key.get_pressed()[pygame.K_LSHIFT]
+                
         return 0
     
     #CURRENTLY NOT USED
@@ -422,42 +458,25 @@ class Game:
             
         if timer % 5 == 0:
             command = self.vgame.v_find_move()
-            if command == "MOVELEFT" and self.cursor.x != 0:
-                self.cursor.x -= 1
-            elif command == "MOVERIGHT" and self.cursor.x != self.setup.cells_per_row-2:
-                self.cursor.x += 1
-            elif command == "MOVEUP" and self.cursor.y != 1:
-                self.cursor.y -= 1
-            elif command == "MOVEDOWN" and self.cursor.y != self.setup.cells_per_column-1:
-                self.cursor.y += 1
+            if command == "MOVELEFT" and self.cursor.get_x() != 0:
+                self.cursor.move_left()
+            elif command == "MOVERIGHT" and self.cursor.get_x() != self.setup.cells_per_row-2:
+                self.cursor.move_right()
+            elif command == "MOVEUP" and self.cursor.get_y() != 1:
+                self.cursor.move_up()
+            elif command == "MOVEDOWN" and self.cursor.get_y() != self.setup.cells_per_column-1:
+                self.cursor.move_down()
             elif command == "SWAP":
-                if self.grid.can_swap(self.cursor.x, self.cursor.y) and self.grid.can_swap(self.cursor.x+1, self.cursor.y):
+                if self.grid.can_swap(self.cursor.get_x(), self.cursor.get_y()) and self.grid.can_swap(self.cursor.get_x()+1, self.cursor.get_y()):
                     initialoffset = self.setup.cell_dimension % self.setup.cell_swap_speed
                     if initialoffset == 0:
                         initialoffset = self.setup.cell_swap_speed
-                    self.grid.set_swap_offset(self.cursor.x, self.cursor.y, initialoffset)
-                    self.grid.set_swap_offset(self.cursor.x+1, self.cursor.y, -1*initialoffset)
+                    self.grid.set_swap_offset(self.cursor.get_x(), self.cursor.get_y(), initialoffset)
+                    self.grid.set_swap_offset(self.cursor.get_x()+1, self.cursor.get_y(), -1*initialoffset)
     
-                    self.vgame.vgrid.set_swap_offset(self.cursor.x, self.cursor.y, initialoffset)
-                    self.vgame.vgrid.set_swap_offset(self.cursor.x+1, self.cursor.y, -1*initialoffset)  
-            elif command == "WANDER":
-                if self.cursor.x == self.setup.cells_per_row - 2 and self.cursor.y <= self.setup.cells_per_column - 2:
-                    self.cursor.y += 1
-                elif self.cursor.y == self.setup.cells_per_column - 1:
-                    if self.cursor.x == 0:
-                        self.cursor.y -= 1
-                    else:
-                        self.cursor.x -= 1
-                elif self.cursor.x % 2 == 0:
-                    if self.cursor.y == 1:
-                        self.cursor.x += 1
-                    else:
-                        self.cursor.y -= 1
-                elif self.cursor.x % 2 == 1:
-                    if self.cursor.y == self.setup.cells_per_column - 2:
-                        self.cursor.x += 1
-                    else:
-                        self.cursor.y += 1             
+                    self.vgame.vgrid.set_swap_offset(self.cursor.get_x(), self.cursor.get_y(), initialoffset)
+                    self.vgame.vgrid.set_swap_offset(self.cursor.get_x()+1, self.cursor.get_y(), -1*initialoffset)  
+            #elif command == "WANDER": #WIP 
                 
         return 0
         
@@ -471,11 +490,8 @@ class Game:
         self.drop_blocks()
         self.combo_blocks()
         
-        '''
-        if self.player_type == 1:
-            self.vgame.v_gameloop()
-        '''
-        if len(self.gcq) == 0 and self.graceperiod != 0 and timer % self.setup.board_raise_rate == 0:
+        #If there are no chains, the grace period is not set, and the board is set to raise
+        if not self.active_chains and self.graceperiod != 0 and timer % self.setup.board_raise_rate == 0:
             self.raise_board()
             
         if self.graceperiod == 0:
@@ -488,18 +504,18 @@ class Game:
         
         pygame.draw.rect(screen,
             self.setup.WHITE,
-            [(self.setup.cell_between + self.setup.cell_dimension) * self.cursor.x + self.setup.cell_between + self.setup.cell_dimension//2 + hoff,
-            (self.setup.cell_between + self.setup.cell_dimension) * self.cursor.y + self.setup.cell_between - self.grid.get_board_offset() + self.setup.cell_dimension//2,
+            [(self.setup.cell_between + self.setup.cell_dimension) * self.cursor.get_x() + self.setup.cell_between + self.setup.cell_dimension//2 + hoff,
+            (self.setup.cell_between + self.setup.cell_dimension) * self.cursor.get_y() + self.setup.cell_between - self.grid.get_board_offset() + self.setup.cell_dimension//2,
             2*self.setup.cell_dimension+self.setup.cell_between,
             self.setup.cell_dimension],
             self.setup.cell_between*5)
         pygame.draw.lines(screen,
             self.setup.WHITE,
             False,
-            (((self.setup.cell_between + self.setup.cell_dimension) * (self.cursor.x +1) + self.setup.cell_between//2 + self.setup.cell_dimension//2 + hoff,
-                (self.setup.cell_between + self.setup.cell_dimension) * self.cursor.y + 2*self.setup.cell_between- self.grid.get_board_offset() + self.setup.cell_dimension//2),
-                ((self.setup.cell_between + self.setup.cell_dimension) * (self.cursor.x +1) + self.setup.cell_between//2 + self.setup.cell_dimension//2 + hoff,
-                (self.setup.cell_between + self.setup.cell_dimension) * (self.cursor.y+1) - self.setup.cell_between- self.grid.get_board_offset() + self.setup.cell_dimension//2)),
+            (((self.setup.cell_between + self.setup.cell_dimension) * (self.cursor.get_x() +1) + self.setup.cell_between//2 + self.setup.cell_dimension//2 + hoff,
+                (self.setup.cell_between + self.setup.cell_dimension) * self.cursor.get_y() + 2*self.setup.cell_between- self.grid.get_board_offset() + self.setup.cell_dimension//2),
+                ((self.setup.cell_between + self.setup.cell_dimension) * (self.cursor.get_x() +1) + self.setup.cell_between//2 + self.setup.cell_dimension//2 + hoff,
+                (self.setup.cell_between + self.setup.cell_dimension) * (self.cursor.get_y()+1) - self.setup.cell_between- self.grid.get_board_offset() + self.setup.cell_dimension//2)),
             self.setup.cell_between*5) 
         
     def draw_frame(self, screen):
@@ -514,33 +530,25 @@ class Game:
                          self.setup.cell_between)
          
     def draw_board(self, screen, timer):
-        '''
-        if self.playertype == 1:
-            self.vgame.v_draw_board(screen, timer)
-        '''
-
+        
+        #Set the Horizontal Offset. Used to pad the border and the result should be something like _[]_[]_[]_ or just _[]_ for one player
         hoff = self.setup.display_width*(1+2*self.player_number)
         
-        for column in range(self.setup.cells_per_row):
-            index = self.buffer.get_color(column)
+        #draw the cells before the border for layering
 
-            sprite = self.setup.cell_type_array[index]
-            
+        for column in range(self.setup.cells_per_row):
+            #draw the buffer
+            index = self.buffer.get_color(column)
+            sprite = self.setup.cell_type_array[index]        
             screen.blit(sprite, ((self.setup.cell_between + self.setup.cell_dimension) * (column) + self.setup.cell_between + self.setup.cell_dimension//2 + hoff,
                                  (self.setup.cell_between + self.setup.cell_dimension) * (self.setup.cells_per_column) + self.setup.cell_between + self.setup.cell_dimension//2 - self.grid.get_board_offset()))
             
-            
-            #color = self.setup.cell_type_array[self.buffer.get_color(column)]
-            #pygame.draw.rect(screen,
-            #                 color,
-            #                 [(self.setup.cell_between + self.setup.cell_dimension) * (column) + self.setup.cell_between + self.setup.cell_dimension//2 + hoff,
-            #                  (self.setup.cell_between + self.setup.cell_dimension) * (self.setup.cells_per_column) + self.setup.cell_between + self.setup.cell_dimension//2 - self.grid.get_board_offset(),
-            #                  self.setup.cell_dimension,
-            #                  self.setup.cell_dimension])
-            
+            #draw each row
             for row in range(self.setup.cells_per_column-1, -1, -1):
                 index = self.grid.get_color(column, row)
                 explode = self.grid.get_curr_fade(column, row)
+
+                #if any cells are exploding, update their sprites
                 if explode > 0:
                     index = (5*(explode-1))//(self.setup.combo_fade_time)
                     sprite = self.setup.explode_array[index]
@@ -550,20 +558,17 @@ class Game:
                     sprite = self.setup.cell_type_array[index]
                     screen.blit(sprite, ((self.setup.cell_between + self.setup.cell_dimension) * (column) + self.setup.cell_between + self.grid.get_swap_offset(column, row) + self.setup.cell_dimension//2 + hoff,
                                      (self.setup.cell_between + self.setup.cell_dimension) * (row) + self.setup.cell_between + self.grid.get_drop_offset(column, row) + self.setup.cell_dimension//2 - self.grid.get_board_offset()))
-            
-                #if self.grid.can_drop(column, row):
-                #    pygame.draw.rect(screen,
-                #                 self.setup.WHITE,
-                #                 [(self.setup.cell_between + self.setup.cell_dimension) * (column) + self.setup.cell_between + self.grid.get_swap_offset(column, row) + self.setup.cell_dimension//2 + hoff,
-                #                  (self.setup.cell_between + self.setup.cell_dimension) * (row) + self.setup.cell_between + self.grid.get_drop_offset(column, row) + self.setup.cell_dimension//2 - self.grid.get_board_offset(), #draw from bottom up
-                #                  self.setup.cell_dimension//2,
-                #                  self.setup.cell_dimension//2])
         
-        pos = []
+        #Display Active Combo Count
+        pygame.draw.circle(screen, self.setup.WHITE, [hoff + self.setup.display_width + 2*self.setup.cell_dimension, 2*self.setup.cell_dimension], self.setup.cell_dimension)
+        multiplier = self.setup.font.render("x" + str(self.active_combo_length), True, self.setup.PURPLE)
+        screen.blit(multiplier, [hoff + self.setup.display_width + int(1.5*self.setup.cell_dimension), int(1.5*self.setup.cell_dimension)])
+        #Obsolte code for displaying a combo number next to the active combo. No longer useful in this code right now, but may prove useful later. Commented out for now.
+        '''pos = []
         
-        for c in range(len(self.combodata)):
+        for c in range(len(self.tempchainplaceholder)):
             pos.append((self.setup.cells_per_row, self.setup.cells_per_column,-1))
-            for loc in self.combodata[c].locations:
+            for loc in self.tempchainplaceholder[c].locations:
                 if loc[1] < pos[c][1] or (loc[1] == pos[c][1] and loc[0] < pos[c][0]):
                     pos[c] = loc
                     
@@ -576,7 +581,10 @@ class Game:
             multi = self.setup.font.render(str(c+1) + "x", True, self.setup.PURPLE)
             screen.blit(multi, [(self.setup.cell_between + self.setup.cell_dimension) * (pos[c][0]) + self.setup.cell_between + self.setup.cell_dimension//2 + hoff - self.setup.fontsize//2,
                              (self.setup.cell_between + self.setup.cell_dimension) * (pos[c][1]) + self.setup.cell_between + self.setup.cell_dimension//2 - self.grid.get_board_offset() - self.setup.fontsize//2])
-        
+        '''
+
+        #WIP: Display Score
+        '''
         if timer < 30:
             font = pygame.font.Font(pygame.font.get_default_font(), 16)          
             sbs = "Score: " + str(self.scoreboard.total_score)
@@ -584,7 +592,8 @@ class Game:
             textRect = text.get_rect()  
             textRect.center = (self.setup.display_width//2 + hoff, self.setup.display_height) 
             screen.blit(text, textRect)
-                    
+        '''
+
         # Draw the Cursor
         if timer < 45:
             self.draw_cursor(screen)

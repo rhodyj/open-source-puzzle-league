@@ -47,40 +47,10 @@ class VirtualGame:
         self.goals = set()
 
     def v_swap_blocks(self, b1, b2):
-        foo = self.vgrid.get_color(b1[0], b1[1])
-        foop1 = self.vgrid.get_color(b2[0], b2[1])
-
-        for c in self.vgcq.queue:
-            if (b1[0], b1[1], foo) in c.locations:
-                c.locations.remove((b1[0], b1[1], foo))
-                c.locations.add((b2[0], b2[1], foo))
-            elif (b2[0], b2[1], foop1) in c.locations:
-                c.locations.remove((b2[0], b2[1], foop1))
-                c.locations.add((b1[0], b1[1], foop1))  
-        
-        self.vgrid.set_color(b1[0], b1[1], foop1)
-        self.vgrid.set_color(b2[0], b2[1], foo)
+        return
 
     def v_clean(self, combolist):
-        
-        tmpcombo = ComboClass.Combo()
-        
-        for c0 in combolist.copy(): #for each combo in the list of combos
-            isbad = False
-            for loc in c0.locations:
-                if self.vgrid.can_drop(loc[0], loc[1]):
-                    isbad = True
-            if c0.numblocks < 3 or c0.color < 3 or isbad:
-                combolist.remove(c0) #remove small, "black/white", or redundant combos
-    
-        for c0 in combolist.copy():
-            tmpcombo.numblocks += c0.numblocks
-            for loc in c0.locations:
-                tmpcombo.locations.add((loc[0], loc[1], self.vgrid.get_color(loc[0], loc[1])))
-            
-        tmpcombo.timeleft = tmpcombo.numblocks*self.vsetup.combo_fade_time
-        
-        return tmpcombo
+        return
     
     def v_can_hcombo(self, column, row):
         color = self.vgrid.get_color(column, row)
@@ -160,9 +130,9 @@ class VirtualGame:
             nextblockleft = self.v_find_next_left_block(tmpcomblo, targetcolor)
             
             if nextblockleft != (-1, -1):
-                if self.vcursor.x > nextblockleft[0]:
+                if self.vcursor.get_x() > nextblockleft[0]:
                     return "MOVELEFT"
-                elif self.vcursor.x < nextblockleft[0]:
+                elif self.vcursor.get_x() < nextblockleft[0]:
                     return "MOVERIGHT"
                 else:
                     return "SWAP"
@@ -186,9 +156,9 @@ class VirtualGame:
             nextblockright = self.v_find_next_right_block(tmpcomblo, targetcolor)
                 
             if nextblockright != (-1, -1):
-                if self.vcursor.x + 1 > nextblockright[0]:
+                if self.vcursor.get_x() + 1 > nextblockright[0]:
                     return "MOVELEFT"
-                elif self.vcursor.x + 1 < nextblockright[0]:
+                elif self.vcursor.get_x() + 1 < nextblockright[0]:
                     return "MOVERIGHT"
                 else:
                     return "SWAP"
@@ -206,7 +176,7 @@ class VirtualGame:
         if downoffset >= 3:
             return "DONOTHING"
         else:
-            vdiff = self.vcursor.y - (comblo[1] + downoffset)
+            vdiff = self.vcursor.get_y() - (comblo[1] + downoffset)
             if vdiff < 0:
                 return "MOVEDOWN"
             elif vdiff > 0:
@@ -217,16 +187,16 @@ class VirtualGame:
                 nextblockright = self.v_find_next_right_block(tmpcomblo, targetcolor)
                 
                 if nextblockleft != (-1,-1):
-                    if self.vcursor.x > nextblockleft[0]:
+                    if self.vcursor.get_x() > nextblockleft[0]:
                         return "MOVELEFT"
-                    elif self.vcursor.x < nextblockleft[0]:
+                    elif self.vcursor.get_x() < nextblockleft[0]:
                         return "MOVERIGHT"
                     else:
                         return "SWAP"
                 elif nextblockright != (-1,-1):
-                    if self.vcursor.x + 1 > nextblockright[0]:
+                    if self.vcursor.get_x() + 1 > nextblockright[0]:
                         return "MOVELEFT"
-                    elif self.vcursor.x +1 < nextblockright[0]:
+                    elif self.vcursor.get_x() +1 < nextblockright[0]:
                         return "MOVERIGHT"
                     else:
                         return "SWAP"
@@ -234,7 +204,7 @@ class VirtualGame:
                     return "MOVEDOWN"
 
     def v_combo_scan(self):
-        centralblock = (self.vcursor.x, self.vcursor.y, "null")
+        centralblock = (self.vcursor.get_x(), self.vcursor.get_y(), "null")
         
         for column in range(self.vsetup.cells_per_row):
             for row in range(self.vsetup.cells_per_column):
@@ -252,26 +222,26 @@ class VirtualGame:
                     elif numdown >= 2:
                         centralblock = (column, row, "down")
         
-        if centralblock[2] == "null" and self.vgrid.get_color(self.vcursor.x, self.vcursor.y) > 2:
-            cd = self.v_can_hcombo(self.vcursor.x, self.vcursor.y)
+        if centralblock[2] == "null" and self.vgrid.get_color(self.vcursor.get_x(), self.vcursor.get_y()) > 2:
+            cd = self.v_can_hcombo(self.vcursor.get_x(), self.vcursor.get_y())
             numleft = cd[0]
             numright = cd[1]
-            numdown = self.v_can_vcombo(self.vcursor.x, self.vcursor.y)
+            numdown = self.v_can_vcombo(self.vcursor.get_x(), self.vcursor.get_y())
             if numleft >= 2:
-                self.goals.add((self.vcursor.x, self.vcursor.y))
-                centralblock = (self.vcursor.x, self.vcursor.y, "left")
+                self.goals.add((self.vcursor.get_x(), self.vcursor.get_y()))
+                centralblock = (self.vcursor.get_x(), self.vcursor.get_y(), "left")
             elif numright >= 2:
-                self.goals.add((self.vcursor.x, self.vcursor.y))
-                centralblock = (self.vcursor.x, self.vcursor.y, "right")
+                self.goals.add((self.vcursor.get_x(), self.vcursor.get_y()))
+                centralblock = (self.vcursor.get_x(), self.vcursor.get_y(), "right")
             elif numleft + numright >= 2:
-                self.goals.add((self.vcursor.x, self.vcursor.y))
-                centralblock = (self.vcursor.x, self.vcursor.y, "leftright")   
+                self.goals.add((self.vcursor.get_x(), self.vcursor.get_y()))
+                centralblock = (self.vcursor.get_x(), self.vcursor.get_y(), "leftright")   
             elif numdown >= 2:
-                self.goals.add((self.vcursor.x, self.vcursor.y))
-                centralblock = (self.vcursor.x, self.vcursor.y, "down")
+                self.goals.add((self.vcursor.get_x(), self.vcursor.get_y()))
+                centralblock = (self.vcursor.get_x(), self.vcursor.get_y(), "down")
         
         if centralblock[2] == "left":
-            vdiff = self.vcursor.y - centralblock[1]
+            vdiff = self.vcursor.get_y() - centralblock[1]
             if vdiff < 0:
                 return "MOVEDOWN"
             elif vdiff > 0:
@@ -279,7 +249,7 @@ class VirtualGame:
             else:
                 return self.v_find_next_left_move(centralblock)
         elif centralblock[2] == "right":
-            vdiff = self.vcursor.y - centralblock[1]
+            vdiff = self.vcursor.get_y() - centralblock[1]
             if vdiff < 0:
                 return "MOVEDOWN"
             elif vdiff > 0:
@@ -287,7 +257,7 @@ class VirtualGame:
             else:
                 return self.v_find_next_right_move(centralblock)
         elif centralblock[2] == "leftright":
-            vdiff = self.vcursor.y - centralblock[1]
+            vdiff = self.vcursor.get_y() - centralblock[1]
             if vdiff < 0:
                 return "MOVEDOWN"
             elif vdiff > 0:
@@ -334,40 +304,10 @@ class VirtualGame:
                     self.vgrid.set_swap_offset(column, row, 0)
                         
     def v_pop_combos(self, combo):
-        for row in range(self.vsetup.cells_per_column-1, -1, -1):
-            for column in range(self.vsetup.cells_per_row):
-                #if column in combo.locations[0] and row in combo.locations[1]:
-                if (column, row, self.vgrid.get_color(column, row)) in combo.locations:
-                    if self.vgrid.get_curr_fade(column, row) == 0 and self.vgrid.get_color(column, row) > 2:
-                        self.vgrid.set_curr_fade(column, row, 1) #mark all combos to be popped
-                        combo.timeleft -= 1
-                        #print("Marking for deletion: " + str((column, row))) 
-                    if self.vgrid.get_curr_fade(column, row) > 0:
+        return
 
-                        if self.vgrid.get_curr_fade(column, row) == 1:
-                            pygame.mixer.Sound.play(self.vsetup.action_sounds[0])#PLAY EXPLOSION SOUND
-                            combo.locations.remove((column, row, self.vgrid.get_color(column,row)))
-                            combo.locations.add((column, row, 1))
-                            self.vgrid.set_color(column,row, 1)
-                        
-
-                        self.vgrid.set_curr_fade(column, row, self.vgrid.get_curr_fade(column, row) + 1)
-                        combo.timeleft -= 1
-                        if self.vgrid.get_curr_fade(column, row) == self.vsetup.combo_fade_time:
-                            self.vgrid.set_curr_fade(column, row, 0)
-
-                            #print(str(self.vgrid.get_curr_fade(column, row)) + " tics left for " + str((column, row)))
-
-        #if combo.timeleft == 0:
-        #    for x in combo.locations:
-        #        print("\t" + str(self.vgrid.get_curr_fade(x[0], x[1])))
     def v_combo_blocks(self):
-        for cq in self.vgcq.queue:  #pop blocks until they go black
-            for c in cq.locations:
-                self.vgrid.set_color(c[0], c[1], 0)
-                self.vgrid.set_curr_fade(c[0], c[1], 0)
-                self.goals.add((c[0], c[1]))
-            self.vgcq.queue.remove(cq)
+        return
             
     
     def v_drop_blocks(self):
@@ -391,18 +331,18 @@ class VirtualGame:
 
         pygame.draw.rect(screen,
             self.vsetup.WHITE,
-            [(self.vsetup.cell_between + self.vsetup.cell_dimension) * self.vcursor.x + self.vsetup.cell_between + self.vsetup.cell_dimension//2 + hoff,
-            (self.vsetup.cell_between + self.vsetup.cell_dimension) * self.vcursor.y + self.vsetup.cell_between - self.vgrid.get_board_offset() + self.vsetup.cell_dimension//2,
+            [(self.vsetup.cell_between + self.vsetup.cell_dimension) * self.vcursor.get_x() + self.vsetup.cell_between + self.vsetup.cell_dimension//2 + hoff,
+            (self.vsetup.cell_between + self.vsetup.cell_dimension) * self.vcursor.get_y() + self.vsetup.cell_between - self.vgrid.get_board_offset() + self.vsetup.cell_dimension//2,
             2*self.vsetup.cell_dimension+self.vsetup.cell_between,
             self.vsetup.cell_dimension],
             self.vsetup.cell_between)
         pygame.draw.lines(screen,
             self.vsetup.WHITE,
             False,
-            (((self.vsetup.cell_between + self.vsetup.cell_dimension) * (self.vcursor.x +1) + self.vsetup.cell_between//2 + self.vsetup.cell_dimension//2 + hoff,
-                (self.vsetup.cell_between + self.vsetup.cell_dimension) * self.vcursor.y + 2*self.vsetup.cell_between- self.vgrid.get_board_offset() + self.vsetup.cell_dimension//2),
-                ((self.vsetup.cell_between + self.vsetup.cell_dimension) * (self.vcursor.x +1) + self.vsetup.cell_between//2 + self.vsetup.cell_dimension//2 + hoff,
-                (self.vsetup.cell_between + self.vsetup.cell_dimension) * (self.vcursor.y+1) - self.vsetup.cell_between- self.vgrid.get_board_offset() + self.vsetup.cell_dimension//2)),
+            (((self.vsetup.cell_between + self.vsetup.cell_dimension) * (self.vcursor.get_x() +1) + self.vsetup.cell_between//2 + self.vsetup.cell_dimension//2 + hoff,
+                (self.vsetup.cell_between + self.vsetup.cell_dimension) * self.vcursor.get_y() + 2*self.vsetup.cell_between- self.vgrid.get_board_offset() + self.vsetup.cell_dimension//2),
+                ((self.vsetup.cell_between + self.vsetup.cell_dimension) * (self.vcursor.get_x() +1) + self.vsetup.cell_between//2 + self.vsetup.cell_dimension//2 + hoff,
+                (self.vsetup.cell_between + self.vsetup.cell_dimension) * (self.vcursor.get_y()+1) - self.vsetup.cell_between- self.vgrid.get_board_offset() + self.vsetup.cell_dimension//2)),
             self.vsetup.cell_between) 
         
     def v_draw_frame(self, screen):

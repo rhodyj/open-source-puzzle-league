@@ -102,7 +102,7 @@ class GameScreen:
             isgameover = self.gameover[i]
 
             #The actual "game" ends when one of the players has had a game over
-            if isgameover == False:
+            if not isgameover:
                 if game.player_type == 0: #if the player is a human 
                     if game.button_logic(pygame.event.get()) == -1: #handle player input; calls the function and stops if there's an error
                         return True

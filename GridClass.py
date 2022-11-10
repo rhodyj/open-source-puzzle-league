@@ -1,5 +1,6 @@
 import random
 import CellClass
+import warnings
 
 
 class Grid:
@@ -66,12 +67,43 @@ class Grid:
         
     def get_curr_fade(self,x,y):
         return self.cell_grid[x+1][y+1].combo_timer
+
+    def fade(self, x, y):
+        self.cell_grid[x+1][y+1].combo_timer += 1
     
     def set_just_dropped(self, x, y, jd): #has a cell just landed? Useful for combo windows
         self.cell_grid[x+1][y+1].just_dropped = jd
         
     def get_just_dropped(self,x,y):
         return self.cell_grid[x+1][y+1].just_dropped
+
+    def mark_for_deletion(self, x, y): #mark a combo for deletion/"makes it grey"
+        self.set_curr_fade(x, y, 1) #mark all combos to be popped
+        self.set_type(x, y, "grey")
+        self.set_color(x, y, -1)
+        #Set up some warnings
+        if self.get_drop_offset(x,y) != 0:
+            self.set_drop_offset(x, y, 0)
+            warnings.warn("Possible error: Cell at " + str((x,y)) + " is being set to grey despite falling")
+        if self.get_swap_offset(x,y) != 0:
+            self.set_swap_offset(x, y, 0)
+            warnings.warn("Possible error: Cell at " + str((x,y)) + " is being set to grey despite swapping")
+
+
+    def set_to_empty(self,x,y):
+        self.set_curr_fade(x, y, 0)
+        self.set_type(x, y, "empty")
+        self.set_color(x, y, -1)
+        #Set up some warnings
+        if self.get_just_dropped(x,y):
+            self.set_just_dropped(x, y, False)
+            warnings.warn("Possible error: Cell at " + str((x,y)) + " is being set to black despite having just dropped")
+        if self.get_drop_offset(x,y) != 0:
+            self.set_drop_offset(x, y, 0)
+            warnings.warn("Possible error: Cell at " + str((x,y)) + " is being set to black despite falling")
+        if self.get_swap_offset(x,y) != 0:
+            self.set_swap_offset(x, y, 0)
+            warnings.warn("Possible error: Cell at " + str((x,y)) + " is being set to black despite swapping")
     
     '''check for valid moves within the grid. Cells drop automatically if they aren't on
     a stable surface (e.g. another cell that isn't moving, a boundary tile, garbage [once garbage is implemented]).
@@ -92,12 +124,12 @@ class Grid:
             c0 = not self.can_drop(x,y) #a "block" cell cannot be swapped if it is falling or able to fall. It must be on "solid ground."
         elif self.get_type(x,y) == "empty":
             c0 = self.get_drop_offset(x,y-1) == 0 #an "empty" cell cannot be swapped if there is anything falling into it. However, an empty cell doesn't need to be on "solid ground" to be swapped
-        
+
         c1 = self.get_swap_offset(x,y) == 0 #the cell can't already be moving to the left or right
 
         return c0 and c1
 
-    def has_falling_blocks(self, setup): #does the board have any falling blocks? May not have any uses at the moment, but could prove valuable later
+    def has_falling_blocks(self, setup): #does the board have any falling blocks? Useful for detecting idle state, which helps in determining chains
         islooking = False
         for column in range(setup.cells_per_row):
             for row in range(setup.cells_per_column-1, -1, -1): #go from bottom to top
